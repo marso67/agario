@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Agar — восстановление</title>
+<title>Agario</title>
 <style>
   :root{ --blue:#2b6ef6; --card:#131c31; --bg:#070d1a; }
   *{box-sizing:border-box}
@@ -12,7 +12,6 @@
   canvas#game{display:none}
   body.playing canvas#game{display:block}
 
-  /* ---------- МЕНЮ (по референсу) ---------- */
   #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:24px}
   #chatPanel{position:fixed;left:16px;bottom:16px;width:300px;height:420px;background:#0d1526;
     border:1px solid #1f2b45;border-radius:14px;display:flex;flex-direction:column}
@@ -53,14 +52,12 @@
   .top-row .ava{width:26px;height:26px;border-radius:50%;border:2px solid #c9a227}
   .r1{color:#f1c40f}.r2{color:#bdc3c7}.r3{color:#e67e22}
 
-  /* ---------- ИГРА ---------- */
   #hud{position:fixed;top:10px;left:12px;font-size:14px;color:#cfd8ea;display:none}
   body.playing #hud{display:block}
   #minimap{position:fixed;right:12px;bottom:12px;width:160px;height:160px;background:#0d1526cc;
     border:1px solid #1f2b45;border-radius:8px;display:none}
   body.playing #minimap{display:block}
 
-  /* Кнопка микрофона слева внизу */
   #micBtn{position:fixed;left:16px;bottom:16px;width:52px;height:52px;border-radius:50%;
     border:0;background:#1c2740;color:#fff;cursor:pointer;display:none;align-items:center;
     justify-content:center;box-shadow:0 0 0 0 rgba(43,110,246,.6);transition:.2s}
@@ -69,15 +66,13 @@
   #micBtn.off{background:#3a1620;color:#ff5566}
   #micBtn svg{width:24px;height:24px}
   #micBtn.talking{box-shadow:0 0 0 10px rgba(43,110,246,.25)}
-  #micBtn:hover, .btn:hover, #nick:hover{cursor:pointer}
 </style>
 </head>
 <body>
 
-<!-- ============ МЕНЮ ============ -->
 <div id="menu">
   <div id="chatPanel">
-    <div class="chat-head"><span>🌐</span><span>≡</span><span id="chatClose">✕</span></div>
+    <div class="chat-head"><span>🌐</span><span>≡</span><span>✕</span></div>
     <div class="chat-body">ТУТ ОБЫЧНЫЙ ЧАТ</div>
     <div class="chat-input"><span>😎</span><input placeholder="Напишите сообщение..."></div>
   </div>
@@ -112,7 +107,6 @@
   </div>
 </div>
 
-<!-- ============ ИГРА ============ -->
 <canvas id="game"></canvas>
 <div id="hud">Масса: <b id="mass">20</b> · Позиция: <span id="pos"></span></div>
 <canvas id="minimap" width="160" height="160"></canvas>
@@ -120,69 +114,90 @@
 <button id="micBtn" title="Микрофон">
   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
 </button>
-<svg style="display:none"><path id="micOffPath" d="M3.3 2.3 19.7 18.7 21 17.4 4.6 1z"/></svg>
 
+<script src="/socket.io/socket.io.js"></script>
 <script>
-/* ================= КОНФИГ ================= */
-const CFG = {
-  WORLD: 14142,        // официальный размер карты agar.io [[14]]
-  FOOD_COUNT: 900,
-  BOTS: 35,
-  START_MASS: 20,
-  VOICE_MARGIN: 1.0    // множитель радиуса голоса (1 = ровно видимый экран)
-};
+const CFG = { WORLD: 14142, FOOD_COUNT: 900, VOICE_MARGIN: 1.0 };
 
-/* ================= СОСТОЯНИЕ ================= */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const mm = document.getElementById('minimap').getContext('2d');
 let W = innerWidth, H = innerHeight;
 canvas.width = W; canvas.height = H;
-addEventListener('resize', ()=>{ W=innerWidth; H=innerHeight; canvas.width=W; canvas.height=H; });
+addEventListener('resize', () => { W=innerWidth; H=innerHeight; canvas.width=W; canvas.height=H; });
 
 const mouse = { x: W/2, y: H/2 };
 addEventListener('mousemove', e => { mouse.x=e.clientX; mouse.y=e.clientY; });
 
-const player = { x: CFG.WORLD/2, y: CFG.WORLD/2, mass: CFG.START_MASS,
-                 nick:'nick', color:'#ff4757', r:0 };
+const player = { x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, nick:'nick', color:'#ff4757', r:0 };
 const cam = { x: player.x, y: player.y, zoom: 1 };
-let spectate = false, running = false;
+let spectate = false, running = false, myId = null;
+
+const socket = io();
+const bots = [];
 
 const getR = m => Math.sqrt(m) * 4;
 const rnd = (a,b)=> a + Math.random()*(b-a);
 const dist = (a,b)=> Math.hypot(a.x-b.x, a.y-b.y);
 const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff'];
 
-/* ================= ЕДА И БОТЫ ================= */
 const foods = [];
 const spawnFood = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD),
   r:rnd(3,5), color:`hsl(${rnd(0,360)},70%,55%)` });
 for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
 
-const bots = [];
 const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD),
   mass:rnd(15,400), nick:'bot'+((Math.random()*999)|0),
   color:COLORS[(Math.random()*COLORS.length)|0], r:0, tx:0, ty:0 });
-for (let i=0;i<CFG.BOTS;i++) bots.push(spawnBot());
-const allCells = () => spectate ? bots : [player, ...bots];
 
-/* ================= МЕНЮ -> ИГРА ================= */
+socket.on('welcome', d => { myId = d.id; });
+
+socket.on('state', players => {
+  for (const p of players) {
+    if (p.id === myId) {
+      player.x = p.x; player.y = p.y; player.mass = p.mass;
+      player.nick = p.nick; player.color = p.color;
+      player.r = getR(player.mass);
+    } else {
+      let bot = bots.find(b => b.id === p.id);
+      if (!bot) { bot = spawnBot(); bot.id = p.id; bots.push(bot); }
+      bot.x = p.x; bot.y = p.y; bot.mass = p.mass; bot.nick = p.nick; bot.color = p.color;
+      bot.r = getR(bot.mass);
+    }
+  }
+});
+
+socket.on('player:left', id => {
+  const i = bots.findIndex(b => b.id === id);
+  if (i >= 0) bots.splice(i, 1);
+});
+
 document.getElementById('playBtn').onclick = () => start(false);
 document.getElementById('spectateBtn').onclick = () => start(true);
 document.getElementById('colorDot').onclick = e => {
   player.color = COLORS[(COLORS.indexOf(player.color)+1)%COLORS.length];
   e.target.style.background = player.color;
 };
+
 function start(spec){
   player.nick = document.getElementById('nick').value || 'nick';
   spectate = spec;
-  document.body.classList.add('playing');   // cursor: none
+  document.body.classList.add('playing');
   running = true;
-  requestMic();                              // запрос доступа к микрофону (жест пользователя)
+  socket.emit('join', { nick: player.nick, color: player.color });
+  requestMic();
   animate();
 }
 
-/* ================= МИКРОФОН ================= */
+// Отправка позиции мыши на сервер (мировые координаты)
+setInterval(() => {
+  if (!running || spectate) return;
+  const wx = (mouse.x-W/2)/cam.zoom + cam.x;
+  const wy = (mouse.y-H/2)/cam.zoom + cam.y;
+  socket.emit('input', wx, wy);
+}, 33);
+
+/* ===== Микрофон ===== */
 const micBtn = document.getElementById('micBtn');
 let micStream=null, micOn=false, micDenied=false, audioCtx=null, analyser=null;
 
@@ -195,7 +210,6 @@ async function requestMic(){
     audioCtx = new AudioContext();
     analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
     audioCtx.createMediaStreamSource(micStream).connect(analyser);
-    voice.setLocalStream(micStream);
   } catch(e){ micDenied = true; paintMic(); }
 }
 micBtn.onclick = () => {
@@ -211,30 +225,12 @@ function paintMic(){
     : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>`;
 }
 
-/* ================= ГОЛОС ПО БЛИЗОСТИ ================= */
-// Радиус слышимости = диагональ видимой области экрана в мировых координатах
-const voiceRange = () => (Math.hypot(W,H)/2 / cam.zoom) * CFG.VOICE_MARGIN;
-
-const voice = {
-  peers: new Map(),           // id -> {pc, gain, src}
-  setLocalStream(s){ this.local = s; },
-  // Вызывается каждый кадр для реальных игроков (в демо — для ботов-заглушки)
-  update(){
-    const R = voiceRange();
-    for (const [id,p] of this.peers){
-      const d = Math.hypot(p.x-player.x, p.y-player.y);
-      p.gain.gain.value = Math.max(0, 1 - d/R);   // затухание с расстоянием
-    }
-  }
-};
-
-/* ================= ЦИКЛ ================= */
+/* ===== Игровой цикл ===== */
 function animate(){
   if (!running) return;
   requestAnimationFrame(animate);
   ctx.fillStyle = '#f2fbff'; ctx.fillRect(0,0,W,H);
 
-  // --- камера ---
   const focus = spectate ? (bots[0]||player) : player;
   cam.x += (focus.x-cam.x)*0.12; cam.y += (focus.y-cam.y)*0.12;
   const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(focus.mass||20), .55)));
@@ -243,7 +239,6 @@ function animate(){
   ctx.save();
   ctx.translate(W/2, H/2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.x, -cam.y);
 
-  // сетка + границы мира
   ctx.strokeStyle='#dfe8f0'; ctx.lineWidth=1/cam.zoom;
   const step=100, x0=Math.max(0,(cam.x-W/2/cam.zoom)/step|0)*step,
         x1=Math.min(CFG.WORLD,cam.x+W/2/cam.zoom),
@@ -256,72 +251,32 @@ function animate(){
   ctx.strokeStyle='#c0392b'; ctx.lineWidth=6/cam.zoom;
   ctx.strokeRect(0,0,CFG.WORLD,CFG.WORLD);
 
-  // --- движение игрока к «невидимому» курсору ---
-  if (!spectate){
-    const wx = (mouse.x-W/2)/cam.zoom + cam.x, wy = (mouse.y-H/2)/cam.zoom + cam.y;
-    const d = Math.hypot(wx-player.x, wy-player.y);
-    if (d > 2){
-      const sp = 6.5 * Math.pow(CFG.START_MASS/player.mass, .32);
-      player.x += (wx-player.x)/d*sp; player.y += (wy-player.y)/d*sp;
-    }
-    player.x = Math.max(0, Math.min(CFG.WORLD, player.x));
-    player.y = Math.max(0, Math.min(CFG.WORLD, player.y));
-    player.r = getR(player.mass);
-  }
-
-  // --- боты: простой ИИ ---
-  for (const b of bots){
-    b.r = getR(b.mass);
-    if (!b.tx || Math.hypot(b.tx-b.x,b.ty-b.y)<20 || Math.random()<.01){
-      const f = foods[(Math.random()*foods.length)|0]; b.tx=f.x; b.ty=f.y;
-    }
-    const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=4*Math.pow(40/b.mass,.3);
-    b.x+= (b.tx-b.x)/d*sp; b.y+=(b.ty-b.y)/d*sp;
-    b.x=Math.max(0,Math.min(CFG.WORLD,b.x)); b.y=Math.max(0,Math.min(CFG.WORLD,b.y));
-  }
-
-  // --- поедание еды ---
-  for (const c of allCells()){
-    for (let i=foods.length-1;i>=0;i--){
-      const f=foods[i];
-      if (Math.abs(f.x-c.x)<c.r && Math.abs(f.y-c.y)<c.r){
-        c.mass += f.r*f.r*0.05; foods.splice(i,1); foods.push(spawnFood());
-      }
-    }
-  }
-  // --- поедание кружков ---
-  const cells = allCells();
-  for (const a of cells) for (const b of cells){
-    if (a!==b && a.r > b.r*1.15 && dist(a,b) < a.r) {
-      a.mass += b.mass; Object.assign(b, spawnBot());
-    }
-  }
-
-  // --- рендер с отсечением невидимого ---
+  // еда
   const pad = 80/cam.zoom;
   const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad
                    && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
-  for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color;
-    ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
-  for (const c of cells) if (inView(c)){
+  for (const f of foods) if (inView(f)){
+    ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill();
+  }
+
+  // боты (рендер)
+  const allCells = [player, ...bots];
+  for (const c of allCells) if (inView(c)){
     ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
     ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(10,c.r/2.2)}px Arial`;
     ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.nick,c.x,c.y);
   }
   ctx.restore();
 
-  voice.update();
-
-  // HUD + миникарта
   document.getElementById('mass').textContent = Math.round(player.mass);
   document.getElementById('pos').textContent = `${player.x|0}, ${player.y|0}`;
+
   mm.fillStyle='#0d1526'; mm.fillRect(0,0,160,160);
   const s=160/CFG.WORLD;
   mm.strokeStyle='#2b6ef6'; mm.strokeRect(cam.x*s-10,cam.y*s-10,20,20);
   mm.fillStyle='#fff'; for(const b of bots){mm.fillRect(b.x*s,b.y*s,2,2);}
-  if(!spectate){mm.fillStyle=player.color;mm.fillRect(player.x*s-1,player.y*s-1,3,3);}
+  mm.fillStyle=player.color; mm.fillRect(player.x*s-1,player.y*s-1,3,3);
 
-  // пульсация иконки микрофона при речи
   if (analyser && micOn){
     const t=new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(t);
     const lvl=Math.max(...t.map(v=>Math.abs(v-128)));
