@@ -2,260 +2,332 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Буклет-навигатор</title>
+<title>Agar — восстановление</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  
-  body {
-    font-family: system-ui, sans-serif;
-    background: #1a1a1a;
-    height: 100vh;
-    overflow: hidden;
-    touch-action: none; /* отключаем системные жесты */
-  }
+  :root{ --blue:#2b6ef6; --card:#131c31; --bg:#070d1a; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:Arial,sans-serif;overflow:hidden;color:#fff}
+  body.playing{cursor:none}
+  body.playing #menu{display:none}
+  canvas#game{display:none}
+  body.playing canvas#game{display:block}
 
-  #viewer {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    cursor: grab;
-  }
-  #viewer.dragging { cursor: grabbing; }
+  /* ---------- МЕНЮ (по референсу) ---------- */
+  #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:24px}
+  #chatPanel{position:fixed;left:16px;bottom:16px;width:300px;height:420px;background:#0d1526;
+    border:1px solid #1f2b45;border-radius:14px;display:flex;flex-direction:column}
+  .chat-head{display:flex;justify-content:space-between;padding:12px;color:#8fa1c0;font-size:18px}
+  .chat-body{flex:1;display:flex;align-items:center;justify-content:center;color:#cfd8ea;font-size:18px}
+  .chat-input{display:flex;align-items:center;gap:8px;padding:10px;border-top:1px solid #1f2b45}
+  .chat-input input{flex:1;background:#182338;border:0;border-radius:18px;padding:8px 12px;color:#fff;outline:none}
 
-  #booklet {
-    position: absolute;
-    top: 0; left: 0;
-    transform-origin: 0 0;
-    will-change: transform;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
+  #centerCard{display:flex;width:640px;height:480px;border-radius:18px;overflow:hidden;background:var(--card)}
+  .side{width:96px;background:var(--blue);display:flex;flex-direction:column}
+  .side-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:6px;font-size:13px;cursor:pointer;opacity:.95}
+  .side-item.active{background:#0d1526}
+  .side-item .ico{font-size:22px}
+  .content{flex:1;padding:20px 34px;display:flex;flex-direction:column;align-items:center}
+  .online-pill{background:#1c2740;border-radius:16px;padding:6px 16px;font-size:14px}
+  .content hr{width:100%;border:0;border-top:2px solid #fff;margin:14px 0 22px}
+  .avatar{width:150px;height:150px;border-radius:50%;background:#cfd4da;color:#7c828b;
+    display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;
+    background-image:radial-gradient(circle at 50% 35%, #e8ebef 28%, transparent 29%),
+      radial-gradient(circle at 50% 115%, #e8ebef 42%, transparent 43%)}
+  .nick-wrap{margin-top:22px;display:flex;align-items:center;gap:8px}
+  #nick{width:230px;border:0;border-radius:18px;padding:10px 14px;font-size:15px;outline:none}
+  #colorDot{width:22px;height:22px;border-radius:50%;background:#999;cursor:pointer;border:0}
+  .btns{margin-top:34px;display:flex;gap:16px}
+  .btn{border:0;border-radius:20px;padding:12px 22px;font-size:13px;font-weight:bold;
+    letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .btn.white{background:#fff;color:#2b6ef6}
+  .btn.blue{background:var(--blue);color:#fff}
 
-  /* Панель управления */
-  .controls {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: grid;
-    grid-template-areas:
-      ". up ."
-      "left . right"
-      ". down .";
-    gap: 8px;
-    z-index: 10;
-  }
+  #statsPanel{width:300px;background:var(--card);border-radius:14px;padding:14px 16px}
+  .stats-head{display:flex;justify-content:space-between;align-items:center;background:var(--blue);
+    margin:-14px -16px 12px;padding:12px 16px;border-radius:14px 14px 0 0;font-size:18px;font-weight:bold}
+  .stats-head .pill{font-size:11px;background:#fff;color:var(--blue);border-radius:12px;padding:4px 10px;font-weight:bold}
+  .sub{display:inline-block;background:#1c2740;border-radius:12px;padding:4px 10px;font-size:13px;margin-bottom:10px}
+  .top-row{display:flex;align-items:center;gap:10px;padding:8px 2px;font-size:14px}
+  .top-row .pts{margin-left:auto;font-size:12px}
+  .top-row .ava{width:26px;height:26px;border-radius:50%;border:2px solid #c9a227}
+  .r1{color:#f1c40f}.r2{color:#bdc3c7}.r3{color:#e67e22}
 
-  .ctrl-btn {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,0.9);
-    font-size: 22px;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-  }
-  .ctrl-btn:active { transform: scale(0.9); background: #fff; }
-  .ctrl-btn[data-dir="up"]    { grid-area: up; }
-  .ctrl-btn[data-dir="left"]  { grid-area: left; }
-  .ctrl-btn[data-dir="right"] { grid-area: right; }
-  .ctrl-btn[data-dir="down"]  { grid-area: down; }
+  /* ---------- ИГРА ---------- */
+  #hud{position:fixed;top:10px;left:12px;font-size:14px;color:#cfd8ea;display:none}
+  body.playing #hud{display:block}
+  #minimap{position:fixed;right:12px;bottom:12px;width:160px;height:160px;background:#0d1526cc;
+    border:1px solid #1f2b45;border-radius:8px;display:none}
+  body.playing #minimap{display:block}
 
-  /* Зум */
-  .zoom-controls {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 10;
-  }
-
-  /* Индикатор масштаба */
-  .zoom-info {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    background: rgba(0,0,0,0.6);
-    color: #fff;
-    padding: 8px 14px;
-    border-radius: 20px;
-    font-size: 13px;
-    z-index: 10;
-  }
-
-  @media (max-width: 600px) {
-    .ctrl-btn { width: 52px; height: 52px; font-size: 20px; }
-    .controls { bottom: 16px; }
-  }
+  /* Кнопка микрофона слева внизу */
+  #micBtn{position:fixed;left:16px;bottom:16px;width:52px;height:52px;border-radius:50%;
+    border:0;background:#1c2740;color:#fff;cursor:pointer;display:none;align-items:center;
+    justify-content:center;box-shadow:0 0 0 0 rgba(43,110,246,.6);transition:.2s}
+  body.playing #micBtn{display:flex}
+  #micBtn.on{background:var(--blue)}
+  #micBtn.off{background:#3a1620;color:#ff5566}
+  #micBtn svg{width:24px;height:24px}
+  #micBtn.talking{box-shadow:0 0 0 10px rgba(43,110,246,.25)}
+  #micBtn:hover, .btn:hover, #nick:hover{cursor:pointer}
 </style>
 </head>
 <body>
 
-<div id="viewer">
-  <!-- Замените src на ваш скан буклета -->
-  <img id="booklet" src="booklet.jpg" alt="Буклет" draggable="false">
+<!-- ============ МЕНЮ ============ -->
+<div id="menu">
+  <div id="chatPanel">
+    <div class="chat-head"><span>🌐</span><span>≡</span><span id="chatClose">✕</span></div>
+    <div class="chat-body">ТУТ ОБЫЧНЫЙ ЧАТ</div>
+    <div class="chat-input"><span>😎</span><input placeholder="Напишите сообщение..."></div>
+  </div>
+
+  <div id="centerCard">
+    <div class="side">
+      <div class="side-item"><span class="ico">🖼️</span>Скины</div>
+      <div class="side-item active"><span class="ico">🏠</span>Главная</div>
+      <div class="side-item"><span class="ico">⭐</span>Рейтинг</div>
+    </div>
+    <div class="content">
+      <div class="online-pill">Онлайн: <span id="onlineCount">84</span></div>
+      <hr>
+      <div class="avatar">ДОБАВИТЬ +</div>
+      <div class="nick-wrap">
+        <input id="nick" placeholder="nick" maxlength="15">
+        <button id="colorDot" title="Цвет"></button>
+      </div>
+      <div class="btns">
+        <button class="btn white" id="spectateBtn">👁 НАБЛЮДАТЬ</button>
+        <button class="btn blue" id="playBtn">▶ ИГРАТЬ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="statsPanel">
+    <div class="stats-head">Статистика <span class="pill">Всё время ▲</span></div>
+    <span class="sub">Топ игроков</span>
+    <div class="top-row"><span class="r1">1</span> Jeff <span class="pts r1">126 очков</span><span class="ava" style="background:#e74c3c"></span></div>
+    <div class="top-row"><span class="r2">2</span> sky <span class="pts r2">86 очков</span><span class="ava" style="background:#3498db"></span></div>
+    <div class="top-row"><span class="r3">3</span> Po <span class="pts r3">58 очков</span><span class="ava" style="background:#8e44ad"></span></div>
+  </div>
 </div>
 
-<div class="zoom-info" id="zoomInfo">100%</div>
+<!-- ============ ИГРА ============ -->
+<canvas id="game"></canvas>
+<div id="hud">Масса: <b id="mass">20</b> · Позиция: <span id="pos"></span></div>
+<canvas id="minimap" width="160" height="160"></canvas>
 
-<div class="zoom-controls">
-  <button class="ctrl-btn" id="zoomIn">+</button>
-  <button class="ctrl-btn" id="zoomOut">−</button>
-  <button class="ctrl-btn" id="reset">⟲</button>
-</div>
-
-<div class="controls">
-  <button class="ctrl-btn" data-dir="up">↑</button>
-  <button class="ctrl-btn" data-dir="left">←</button>
-  <button class="ctrl-btn" data-dir="right">→</button>
-  <button class="ctrl-btn" data-dir="down">↓</button>
-</div>
+<button id="micBtn" title="Микрофон">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+</button>
+<svg style="display:none"><path id="micOffPath" d="M3.3 2.3 19.7 18.7 21 17.4 4.6 1z"/></svg>
 
 <script>
-const viewer   = document.getElementById('viewer');
-const img      = document.getElementById('booklet');
-const zoomInfo = document.getElementById('zoomInfo');
-
-let scale = 1;
-let posX = 0, posY = 0;
-const STEP = 80;       // шаг стрелок в пикселях
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 4;
-
-function updateTransform() {
-  img.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-  zoomInfo.textContent = Math.round(scale * 100) + '%';
-}
-
-// Центрируем при загрузке
-img.onload = () => {
-  posX = (viewer.clientWidth  - img.naturalWidth  * scale) / 2;
-  posY = (viewer.clientHeight - img.naturalHeight * scale) / 2;
-  updateTransform();
+/* ================= КОНФИГ ================= */
+const CFG = {
+  WORLD: 14142,        // официальный размер карты agar.io [[14]]
+  FOOD_COUNT: 900,
+  BOTS: 35,
+  START_MASS: 20,
+  VOICE_MARGIN: 1.0    // множитель радиуса голоса (1 = ровно видимый экран)
 };
 
-// --- Кнопки-стрелки ---
-document.querySelectorAll('.ctrl-btn[data-dir]').forEach(btn => {
-  const move = () => {
-    const dir = btn.dataset.dir;
-    if (dir === 'up')    posY += STEP;
-    if (dir === 'down')  posY -= STEP;
-    if (dir === 'left')  posX += STEP;
-    if (dir === 'right') posX -= STEP;
-    updateTransform();
-  };
-  btn.addEventListener('click', move);
-});
+/* ================= СОСТОЯНИЕ ================= */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const mm = document.getElementById('minimap').getContext('2d');
+let W = innerWidth, H = innerHeight;
+canvas.width = W; canvas.height = H;
+addEventListener('resize', ()=>{ W=innerWidth; H=innerHeight; canvas.width=W; canvas.height=H; });
 
-// --- Клавиатура ---
-document.addEventListener('keydown', e => {
-  const map = {
-    ArrowUp:    [0,  STEP],
-    ArrowDown:  [0, -STEP],
-    ArrowLeft:  [ STEP, 0],
-    ArrowRight: [-STEP, 0],
-  };
-  if (map[e.key]) {
-    e.preventDefault();
-    posX += map[e.key][0];
-    posY += map[e.key][1];
-    updateTransform();
-  }
-});
+const mouse = { x: W/2, y: H/2 };
+addEventListener('mousemove', e => { mouse.x=e.clientX; mouse.y=e.clientY; });
 
-// --- Зум ---
-function zoom(delta, cx, cy) {
-  const oldScale = scale;
-  scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta));
-  // зум к точке (cx, cy)
-  const k = scale / oldScale;
-  posX = cx - (cx - posX) * k;
-  posY = cy - (cy - posY) * k;
-  updateTransform();
+const player = { x: CFG.WORLD/2, y: CFG.WORLD/2, mass: CFG.START_MASS,
+                 nick:'nick', color:'#ff4757', r:0 };
+const cam = { x: player.x, y: player.y, zoom: 1 };
+let spectate = false, running = false;
+
+const getR = m => Math.sqrt(m) * 4;
+const rnd = (a,b)=> a + Math.random()*(b-a);
+const dist = (a,b)=> Math.hypot(a.x-b.x, a.y-b.y);
+const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff'];
+
+/* ================= ЕДА И БОТЫ ================= */
+const foods = [];
+const spawnFood = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD),
+  r:rnd(3,5), color:`hsl(${rnd(0,360)},70%,55%)` });
+for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
+
+const bots = [];
+const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD),
+  mass:rnd(15,400), nick:'bot'+((Math.random()*999)|0),
+  color:COLORS[(Math.random()*COLORS.length)|0], r:0, tx:0, ty:0 });
+for (let i=0;i<CFG.BOTS;i++) bots.push(spawnBot());
+const allCells = () => spectate ? bots : [player, ...bots];
+
+/* ================= МЕНЮ -> ИГРА ================= */
+document.getElementById('playBtn').onclick = () => start(false);
+document.getElementById('spectateBtn').onclick = () => start(true);
+document.getElementById('colorDot').onclick = e => {
+  player.color = COLORS[(COLORS.indexOf(player.color)+1)%COLORS.length];
+  e.target.style.background = player.color;
+};
+function start(spec){
+  player.nick = document.getElementById('nick').value || 'nick';
+  spectate = spec;
+  document.body.classList.add('playing');   // cursor: none
+  running = true;
+  requestMic();                              // запрос доступа к микрофону (жест пользователя)
+  animate();
 }
 
-document.getElementById('zoomIn').onclick  = () => zoom(0.2, viewer.clientWidth/2,  viewer.clientHeight/2);
-document.getElementById('zoomOut').onclick = () => zoom(-0.2, viewer.clientWidth/2, viewer.clientHeight/2);
-document.getElementById('reset').onclick   = () => {
-  scale = 1;
-  posX = (viewer.clientWidth  - img.naturalWidth)  / 2;
-  posY = (viewer.clientHeight - img.naturalHeight) / 2;
-  updateTransform();
+/* ================= МИКРОФОН ================= */
+const micBtn = document.getElementById('micBtn');
+let micStream=null, micOn=false, micDenied=false, audioCtx=null, analyser=null;
+
+async function requestMic(){
+  if (micStream || micDenied) return;
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true }});
+    micOn = true; paintMic();
+    audioCtx = new AudioContext();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+    audioCtx.createMediaStreamSource(micStream).connect(analyser);
+    voice.setLocalStream(micStream);
+  } catch(e){ micDenied = true; paintMic(); }
+}
+micBtn.onclick = () => {
+  if (!micStream){ requestMic(); return; }
+  micOn = !micOn;
+  micStream.getAudioTracks()[0].enabled = micOn;
+  paintMic();
+};
+function paintMic(){
+  micBtn.className = micOn ? 'on' : 'off';
+  micBtn.innerHTML = micOn
+    ? `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>`;
+}
+
+/* ================= ГОЛОС ПО БЛИЗОСТИ ================= */
+// Радиус слышимости = диагональ видимой области экрана в мировых координатах
+const voiceRange = () => (Math.hypot(W,H)/2 / cam.zoom) * CFG.VOICE_MARGIN;
+
+const voice = {
+  peers: new Map(),           // id -> {pc, gain, src}
+  setLocalStream(s){ this.local = s; },
+  // Вызывается каждый кадр для реальных игроков (в демо — для ботов-заглушки)
+  update(){
+    const R = voiceRange();
+    for (const [id,p] of this.peers){
+      const d = Math.hypot(p.x-player.x, p.y-player.y);
+      p.gain.gain.value = Math.max(0, 1 - d/R);   // затухание с расстоянием
+    }
+  }
 };
 
-// Колесо мыши
-viewer.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = viewer.getBoundingClientRect();
-  zoom(e.deltaY < 0 ? 0.15 : -0.15, e.clientX - rect.left, e.clientY - rect.top);
-}, { passive: false });
+/* ================= ЦИКЛ ================= */
+function animate(){
+  if (!running) return;
+  requestAnimationFrame(animate);
+  ctx.fillStyle = '#f2fbff'; ctx.fillRect(0,0,W,H);
 
-// --- Drag мышью ---
-let isDragging = false, startX, startY;
-viewer.addEventListener('mousedown', e => {
-  isDragging = true;
-  viewer.classList.add('dragging');
-  startX = e.clientX - posX;
-  startY = e.clientY - posY;
-});
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  posX = e.clientX - startX;
-  posY = e.clientY - startY;
-  updateTransform();
-});
-window.addEventListener('mouseup', () => {
-  isDragging = false;
-  viewer.classList.remove('dragging');
-});
+  // --- камера ---
+  const focus = spectate ? (bots[0]||player) : player;
+  cam.x += (focus.x-cam.x)*0.12; cam.y += (focus.y-cam.y)*0.12;
+  const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(focus.mass||20), .55)));
+  cam.zoom += (targetZoom-cam.zoom)*0.08;
 
-// --- Touch: перетаскивание + pinch-to-zoom ---
-let touches = [], lastDist = 0, lastMid = null;
+  ctx.save();
+  ctx.translate(W/2, H/2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.x, -cam.y);
 
-viewer.addEventListener('touchstart', e => {
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    startX = touches[0].clientX - posX;
-    startY = touches[0].clientY - posY;
-  } else if (touches.length === 2) {
-    lastDist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    lastMid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
+  // сетка + границы мира
+  ctx.strokeStyle='#dfe8f0'; ctx.lineWidth=1/cam.zoom;
+  const step=100, x0=Math.max(0,(cam.x-W/2/cam.zoom)/step|0)*step,
+        x1=Math.min(CFG.WORLD,cam.x+W/2/cam.zoom),
+        y0=Math.max(0,(cam.y-H/2/cam.zoom)/step|0)*step,
+        y1=Math.min(CFG.WORLD,cam.y+H/2/cam.zoom);
+  ctx.beginPath();
+  for(let x=x0;x<x1;x+=step){ctx.moveTo(x,y0);ctx.lineTo(x,y1);}
+  for(let y=y0;y<y1;y+=step){ctx.moveTo(x0,y);ctx.lineTo(x1,y);}
+  ctx.stroke();
+  ctx.strokeStyle='#c0392b'; ctx.lineWidth=6/cam.zoom;
+  ctx.strokeRect(0,0,CFG.WORLD,CFG.WORLD);
+
+  // --- движение игрока к «невидимому» курсору ---
+  if (!spectate){
+    const wx = (mouse.x-W/2)/cam.zoom + cam.x, wy = (mouse.y-H/2)/cam.zoom + cam.y;
+    const d = Math.hypot(wx-player.x, wy-player.y);
+    if (d > 2){
+      const sp = 6.5 * Math.pow(CFG.START_MASS/player.mass, .32);
+      player.x += (wx-player.x)/d*sp; player.y += (wy-player.y)/d*sp;
+    }
+    player.x = Math.max(0, Math.min(CFG.WORLD, player.x));
+    player.y = Math.max(0, Math.min(CFG.WORLD, player.y));
+    player.r = getR(player.mass);
   }
-}, { passive: false });
 
-viewer.addEventListener('touchmove', e => {
-  e.preventDefault();
-  touches = [...e.touches];
-  if (touches.length === 1) {
-    posX = touches[0].clientX - startX;
-    posY = touches[0].clientY - startY;
-    updateTransform();
-  } else if (touches.length === 2) {
-    const dist = Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-    const mid = {
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-    };
-    zoom((dist - lastDist) * 0.005, mid.x, mid.y);
-    lastDist = dist;
-    lastMid = mid;
+  // --- боты: простой ИИ ---
+  for (const b of bots){
+    b.r = getR(b.mass);
+    if (!b.tx || Math.hypot(b.tx-b.x,b.ty-b.y)<20 || Math.random()<.01){
+      const f = foods[(Math.random()*foods.length)|0]; b.tx=f.x; b.ty=f.y;
+    }
+    const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=4*Math.pow(40/b.mass,.3);
+    b.x+= (b.tx-b.x)/d*sp; b.y+=(b.ty-b.y)/d*sp;
+    b.x=Math.max(0,Math.min(CFG.WORLD,b.x)); b.y=Math.max(0,Math.min(CFG.WORLD,b.y));
   }
-}, { passive: false });
+
+  // --- поедание еды ---
+  for (const c of allCells()){
+    for (let i=foods.length-1;i>=0;i--){
+      const f=foods[i];
+      if (Math.abs(f.x-c.x)<c.r && Math.abs(f.y-c.y)<c.r){
+        c.mass += f.r*f.r*0.05; foods.splice(i,1); foods.push(spawnFood());
+      }
+    }
+  }
+  // --- поедание кружков ---
+  const cells = allCells();
+  for (const a of cells) for (const b of cells){
+    if (a!==b && a.r > b.r*1.15 && dist(a,b) < a.r) {
+      a.mass += b.mass; Object.assign(b, spawnBot());
+    }
+  }
+
+  // --- рендер с отсечением невидимого ---
+  const pad = 80/cam.zoom;
+  const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad
+                   && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
+  for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color;
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
+  for (const c of cells) if (inView(c)){
+    ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(10,c.r/2.2)}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.nick,c.x,c.y);
+  }
+  ctx.restore();
+
+  voice.update();
+
+  // HUD + миникарта
+  document.getElementById('mass').textContent = Math.round(player.mass);
+  document.getElementById('pos').textContent = `${player.x|0}, ${player.y|0}`;
+  mm.fillStyle='#0d1526'; mm.fillRect(0,0,160,160);
+  const s=160/CFG.WORLD;
+  mm.strokeStyle='#2b6ef6'; mm.strokeRect(cam.x*s-10,cam.y*s-10,20,20);
+  mm.fillStyle='#fff'; for(const b of bots){mm.fillRect(b.x*s,b.y*s,2,2);}
+  if(!spectate){mm.fillStyle=player.color;mm.fillRect(player.x*s-1,player.y*s-1,3,3);}
+
+  // пульсация иконки микрофона при речи
+  if (analyser && micOn){
+    const t=new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(t);
+    const lvl=Math.max(...t.map(v=>Math.abs(v-128)));
+    micBtn.classList.toggle('talking', lvl>12);
+  }
+}
 </script>
 </body>
 </html>
