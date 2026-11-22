@@ -67,6 +67,10 @@
   #micBtn.off{background:#3a1620;color:#ff5566}
   #micBtn svg{width:24px;height:24px}
   #micBtn.talking{box-shadow:0 0 0 10px rgba(43,110,246,.25)}
+
+  #pauseOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;
+    align-items:center;justify-content:center;font-size:48px;font-weight:bold;color:#fff;z-index:100}
+  body.paused #pauseOverlay{display:flex}
 </style>
 </head>
 <body>
@@ -109,15 +113,30 @@
 </div>
 
 <canvas id="game"></canvas>
-<div id="hud">Масса: <b id="mass">20</b> · Позиция: <span id="pos"></span></div>
+<div id="hud">Масса: <b id="mass">20</b> · Клеток: <span id="cellCount">1</span>/16 · Позиция: <span id="pos"></span></div>
 <canvas id="minimap" width="160" height="160"></canvas>
 
 <button id="micBtn" title="Микрофон">
   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
 </button>
 
+<div id="pauseOverlay">⏸ ПАУЗА (F)</div>
+
 <script>
-const CFG = { WORLD: 14142, FOOD_COUNT: 1200, BOTS: 40 };
+const CFG = {
+  WORLD: 14142,
+  FOOD_COUNT: 3000,
+  VIRUS_COUNT: 70,
+  BOTS: 40,
+  BASE_SPEED: 3.25,
+  MASS_EXP: 0.44,
+  RESPAWN_MS: 10000,
+  MAX_CELLS: 16,
+  MIN_CELL_MASS: 10,
+  MERGE_COOLDOWN: 20,
+  EJECT_MASS: 10
+};
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const mm = document.getElementById('minimap').getContext('2d');
@@ -128,30 +147,123 @@ addEventListener('resize', () => { W=innerWidth; H=innerHeight; canvas.width=W; 
 const mouse = { x: W/2, y: H/2 };
 addEventListener('mousemove', e => { mouse.x=e.clientX; mouse.y=e.clientY; });
 
-const player = { x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, nick:'nick', color:'#ff4757', r:0 };
-const cam = { x: player.x, y: player.y, zoom: 1 };
-let spectate = false, running = false;
+// Игрок теперь массив клеток
+const player = {
+  nick: 'nick',
+  color: '#ff4757',
+  cells: [{ x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, vx: 0, vy: 0, mergeCooldown: 0 }]
+};
+
+const cam = { x: player.cells[0].x, y: player.cells[0].y, zoom: 1 };
+let spectate = false, running = false, paused = false;
 
 const getR = m => Math.sqrt(m) * 4;
 const rnd = (a,b)=> a + Math.random()*(b-a);
 const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff'];
 
+function speedFor(mass){
+  return Math.max(0.6, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.MASS_EXP));
+}
+
+/* ===== ЕДА ===== */
 const foods = [];
 const spawnFood = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(3,5), color:`hsl(${rnd(0,360)},70%,55%)` });
-for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
 
+/* ===== ЗЕЛЁНЫЕ КУСТЫ ===== */
+const viruses = [];
+const spawnVirus = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(28,40), spikes:16, mass:60 });
+
+function respawnWave(){
+  foods.length = 0;   for (let i=0;i<CFG.FOOD_COUNT;i++)  foods.push(spawnFood());
+  viruses.length = 0; for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
+}
+respawnWave();
+setInterval(respawnWave, CFG.RESPAWN_MS);
+
+/* ===== БОТЫ ===== */
 const bots = [];
-const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass:rnd(15,400), 
+const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass:rnd(15,400),
   nick:'bot'+((Math.random()*999)|0), color:COLORS[(Math.random()*COLORS.length)|0], r:0, tx:0, ty:0 });
 for (let i=0;i<CFG.BOTS;i++) bots.push(spawnBot());
 
+/* ===== ВЫБРОС МАССЫ (W) ===== */
+const pellets = [];
+function ejectMass(){
+  for (const cell of player.cells){
+    if (cell.mass < CFG.MIN_CELL_MASS * 2) continue;
+    cell.mass -= CFG.EJECT_MASS;
+    const wx = (mouse.x-W/2)/cam.zoom + cam.x;
+    const wy = (mouse.y-H/2)/cam.zoom + cam.y;
+    const dx = wx - cell.x, dy = wy - cell.y;
+    const d = Math.hypot(dx, dy) || 1;
+    pellets.push({
+      x: cell.x + (dx/d) * getR(cell.mass),
+      y: cell.y + (dy/d) * getR(cell.mass),
+      mass: CFG.EJECT_MASS,
+      r: getR(CFG.EJECT_MASS),
+      vx: (dx/d) * 20,
+      vy: (dy/d) * 20,
+      color: player.color
+    });
+  }
+}
+
+/* ===== РАЗДЕЛЕНИЕ (ПРОБЕЛ) ===== */
+function split(){
+  const newCells = [];
+  for (const cell of player.cells){
+    if (player.cells.length + newCells.length >= CFG.MAX_CELLS) break;
+    if (cell.mass < CFG.MIN_CELL_MASS * 2) continue;
+    const half = cell.mass / 2;
+    cell.mass = half;
+    const wx = (mouse.x-W/2)/cam.zoom + cam.x;
+    const wy = (mouse.y-H/2)/cam.zoom + cam.y;
+    const dx = wx - cell.x, dy = wy - cell.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const impulse = 18;
+    const newCell = {
+      x: cell.x + (dx/d) * getR(half),
+      y: cell.y + (dy/d) * getR(half),
+      mass: half,
+      vx: (dx/d) * impulse,
+      vy: (dy/d) * impulse,
+      mergeCooldown: CFG.MERGE_COOLDOWN
+    };
+    cell.vx = -(dx/d) * impulse;
+    cell.vy = -(dy/d) * impulse;
+    cell.mergeCooldown = CFG.MERGE_COOLDOWN;
+    newCells.push(newCell);
+  }
+  player.cells.push(...newCells);
+}
+
+/* ===== УПРАВЛЕНИЕ ===== */
+addEventListener('keydown', e => {
+  if (!running) return;
+  const key = e.key.toLowerCase();
+  if (key === 'f' || key === 'а') {
+    paused = !paused;
+    document.body.classList.toggle('paused', paused);
+  }
+  if (key === ' ' && !paused) { split(); e.preventDefault(); }
+  if ((key === 'w' || key === 'ц') && !paused) ejectMass();
+});
+
+// Зум колёсиком
+addEventListener('wheel', e => {
+  if (!running) return;
+  cam.zoom *= e.deltaY > 0 ? 0.9 : 1.1;
+  cam.zoom = Math.max(0.1, Math.min(3, cam.zoom));
+  e.preventDefault();
+}, { passive: false });
+
+/* ===== МЕНЮ ===== */
 document.getElementById('playBtn').onclick = () => start(false);
 document.getElementById('spectateBtn').onclick = () => start(true);
 document.getElementById('colorDot').onclick = e => {
   player.color = COLORS[(COLORS.indexOf(player.color)+1)%COLORS.length];
   e.target.style.background = player.color;
 };
-
 function start(spec){
   player.nick = document.getElementById('nick').value || 'nick';
   spectate = spec;
@@ -161,10 +273,9 @@ function start(spec){
   animate();
 }
 
-/* Микрофон */
+/* ===== МИКРОФОН ===== */
 const micBtn = document.getElementById('micBtn');
 let micStream=null, micOn=false, micDenied=false, audioCtx=null, analyser=null;
-
 async function requestMic(){
   if (micStream || micDenied) return;
   try {
@@ -188,22 +299,51 @@ function paintMic(){
     : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>`;
 }
 
-/* Игровой цикл */
+/* ===== РИСОВКА КУСТА ===== */
+function drawVirus(v){
+  ctx.save();
+  ctx.translate(v.x, v.y);
+  ctx.beginPath();
+  for (let i=0;i<v.spikes;i++){
+    const a = (i/v.spikes)*Math.PI*2;
+    const rOut = v.r, rIn = v.r*0.78;
+    ctx.lineTo(Math.cos(a)*rOut, Math.sin(a)*rOut);
+    ctx.lineTo(Math.cos(a+Math.PI/v.spikes)*rIn, Math.sin(a+Math.PI/v.spikes)*rIn);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#22c55e';
+  ctx.fill();
+  ctx.strokeStyle = '#15803d';
+  ctx.lineWidth = 2/cam.zoom;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ===== ИГРОВОЙ ЦИКЛ ===== */
 function animate(){
   if (!running) return;
   requestAnimationFrame(animate);
-  ctx.fillStyle = '#f2fbff'; ctx.fillRect(0,0,W,H);
+  if (paused) return;
 
-  const focus = spectate ? (bots[0]||player) : player;
-  cam.x += (focus.x-cam.x)*0.12; cam.y += (focus.y-cam.y)*0.12;
-  const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(focus.mass||20), .55)));
+  ctx.fillStyle = '#0a0f1c'; ctx.fillRect(0,0,W,H);
+
+  // Камера следует за центром масс игрока
+  let totalMass = 0, cx = 0, cy = 0;
+  for (const cell of player.cells){
+    totalMass += cell.mass;
+    cx += cell.x * cell.mass;
+    cy += cell.y * cell.mass;
+  }
+  cx /= totalMass; cy /= totalMass;
+  cam.x += (cx-cam.x)*0.12; cam.y += (cy-cam.y)*0.12;
+  const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(totalMass), .55)));
   cam.zoom += (targetZoom-cam.zoom)*0.08;
 
   ctx.save();
   ctx.translate(W/2, H/2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.x, -cam.y);
 
-  // Сетка и границы
-  ctx.strokeStyle='#dfe8f0'; ctx.lineWidth=1/cam.zoom;
+  // сетка + границы
+  ctx.strokeStyle='#1a2438'; ctx.lineWidth=1/cam.zoom;
   const step=100, x0=Math.max(0,(cam.x-W/2/cam.zoom)/step|0)*step, x1=Math.min(CFG.WORLD,cam.x+W/2/cam.zoom),
         y0=Math.max(0,(cam.y-H/2/cam.zoom)/step|0)*step, y1=Math.min(CFG.WORLD,cam.y+H/2/cam.zoom);
   ctx.beginPath();
@@ -213,76 +353,149 @@ function animate(){
   ctx.strokeStyle='#c0392b'; ctx.lineWidth=6/cam.zoom;
   ctx.strokeRect(0,0,CFG.WORLD,CFG.WORLD);
 
-  // Движение игрока
-  if (!spectate){
+  // ДВИЖЕНИЕ КЛЕТОК ИГРОКА
+  for (const cell of player.cells){
     const wx = (mouse.x-W/2)/cam.zoom + cam.x, wy = (mouse.y-H/2)/cam.zoom + cam.y;
-    const d = Math.hypot(wx-player.x, wy-player.y);
+    const dx = wx - cell.x, dy = wy - cell.y;
+    const d = Math.hypot(dx, dy);
     if (d > 2){
-      const sp = 6.5 * Math.pow(20/player.mass, 0.32);
-      player.x += (wx-player.x)/d*sp; player.y += (wy-player.y)/d*sp;
+      const sp = speedFor(cell.mass);
+      cell.vx += (dx/d) * sp * 0.15;
+      cell.vy += (dy/d) * sp * 0.15;
     }
-    player.x = Math.max(0, Math.min(CFG.WORLD, player.x));
-    player.y = Math.max(0, Math.min(CFG.WORLD, player.y));
-    player.r = getR(player.mass);
+    cell.vx *= 0.88;
+    cell.vy *= 0.88;
+    cell.x += cell.vx;
+    cell.y += cell.vy;
+    cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
+    cell.y = Math.max(0, Math.min(CFG.WORLD, cell.y));
+    cell.r = getR(cell.mass);
+    if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1/60;
+  }
+
+  // ПРИТЯЖЕНИЕ И СЛИЯНИЕ КЛЕТОК
+  for (let i=0; i<player.cells.length; i++){
+    for (let j=i+1; j<player.cells.length; j++){
+      const a = player.cells[i], b = player.cells[j];
+      if (a.mergeCooldown > 0 || b.mergeCooldown > 0) continue;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy);
+      const minDist = getR(a.mass) + getR(b.mass);
+      if (d < minDist * 0.8){
+        a.mass += b.mass;
+        player.cells.splice(j, 1);
+        j--;
+      } else {
+        const force = 0.3;
+        a.vx += (dx/d) * force;
+        a.vy += (dy/d) * force;
+        b.vx -= (dx/d) * force;
+        b.vy -= (dy/d) * force;
+      }
+    }
   }
 
   // ИИ ботов
   for (const b of bots){
     b.r = getR(b.mass);
     if (!b.tx || Math.hypot(b.tx-b.x,b.ty-b.y)<20 || Math.random()<0.015){
-      const f = foods[(Math.random()*foods.length)|0]; b.tx=f.x; b.ty=f.y;
+      const f = foods[(Math.random()*foods.length)|0]; if(f){b.tx=f.x; b.ty=f.y;}
     }
-    const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=4*Math.pow(40/b.mass,0.3);
+    const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=speedFor(b.mass);
     b.x+= (b.tx-b.x)/d*sp; b.y+=(b.ty-b.y)/d*sp;
     b.x=Math.max(0,Math.min(CFG.WORLD,b.x)); b.y=Math.max(0,Math.min(CFG.WORLD,b.y));
   }
 
-  // Поедание еды
-  const allCells = [player, ...bots];
+  // ПОЕДАНИЕ ЕДЫ (ближайшей клеткой игрока)
+  const allCells = [...player.cells, ...bots];
   for (const c of allCells){
     for (let i=foods.length-1;i>=0;i--){
       const f=foods[i];
       if (Math.abs(f.x-c.x)<c.r && Math.abs(f.y-c.y)<c.r){
-        c.mass += f.r*f.r*0.05; foods.splice(i,1); foods.push(spawnFood());
+        c.mass += f.r*f.r*0.05; foods.splice(i,1);
       }
     }
   }
 
-  // Поедание друг друга
-  for (let i=0; i<allCells.length; i++){
-    for (let j=0; j<allCells.length; j++){
+  // ПОЕДАНИЕ КУСТОВ
+  for (const c of allCells){
+    for (let i=viruses.length-1;i>=0;i--){
+      const v=viruses[i];
+      if (c.r > v.r*1.5 && Math.hypot(v.x-c.x, v.y-c.y) < c.r){
+        c.mass += v.mass; viruses.splice(i,1);
+      }
+    }
+  }
+
+  // ПОЕДАНИЕ ПОРОШКОВ (выброшенная масса)
+  for (const c of allCells){
+    for (let i=pellets.length-1;i>=0;i--){
+      const p=pellets[i];
+      if (Math.abs(p.x-c.x)<c.r && Math.abs(p.y-c.y)<c.r){
+        c.mass += p.mass; pellets.splice(i,1);
+      }
+    }
+  }
+
+  // ПОЕДАНИЕ ДРУГ ДРУГА
+  for (let i=0;i<allCells.length;i++){
+    for (let j=0;j<allCells.length;j++){
       if (i===j) continue;
       const a=allCells[i], b=allCells[j];
-      if (a.r > b.r*1.15 && Math.hypot(a.x-b.x, a.y-b.y) < a.r){
+      if (a.r > b.r*1.15 && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
         a.mass += b.mass;
-        if (b === player) { player.x=CFG.WORLD/2; player.y=CFG.WORLD/2; player.mass=20; }
-        else { Object.assign(b, spawnBot()); }
+        if (b===player.cells[0]){ player.cells[0].x=CFG.WORLD/2; player.cells[0].y=CFG.WORLD/2; player.cells[0].mass=20; }
+        else if (bots.includes(b)) Object.assign(b, spawnBot());
       }
     }
   }
 
-  // Рендер
+  // Движение порошков
+  for (let i=pellets.length-1;i>=0;i--){
+    const p=pellets[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.9; p.vy *= 0.9;
+    p.x = Math.max(0, Math.min(CFG.WORLD, p.x));
+    p.y = Math.max(0, Math.min(CFG.WORLD, p.y));
+  }
+
+  // РЕНДЕР
   const pad = 80/cam.zoom;
-  const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
-  
+  const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad
+                   && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
+
   for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
+  for (const v of viruses) if (inView(v)) drawVirus(v);
+  for (const p of pellets) if (inView(p)){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
   for (const c of allCells) if (inView(c)){
     ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font=`bold ${Math.max(10,c.r/2.2)}px Arial`;
-    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(c.nick,c.x,c.y);
+    // Ник с обводкой как на скриншоте
+    const fontSize = Math.max(12, c.r/2.5);
+    ctx.font=`bold ${fontSize}px Arial`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3/cam.zoom;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(c.nick, c.x, c.y);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(c.nick, c.x, c.y);
   }
   ctx.restore();
 
-  // HUD и миникарта
-  document.getElementById('mass').textContent = Math.round(player.mass);
-  document.getElementById('pos').textContent = `${player.x|0}, ${player.y|0}`;
+  // HUD
+  document.getElementById('mass').textContent = Math.round(totalMass);
+  document.getElementById('cellCount').textContent = player.cells.length;
+  document.getElementById('pos').textContent = `${cx|0}, ${cy|0}`;
+
+  // миникарта
   mm.fillStyle='#0d1526'; mm.fillRect(0,0,160,160);
   const s=160/CFG.WORLD;
   mm.strokeStyle='#2b6ef6'; mm.strokeRect(cam.x*s-10,cam.y*s-10,20,20);
+  mm.fillStyle='#22c55e'; for(const v of viruses){mm.fillRect(v.x*s-1,v.y*s-1,2,2);}
   mm.fillStyle='#fff'; for(const b of bots){mm.fillRect(b.x*s,b.y*s,2,2);}
-  mm.fillStyle=player.color; mm.fillRect(player.x*s-1,player.y*s-1,3,3);
+  mm.fillStyle=player.color; for(const c of player.cells){mm.fillRect(c.x*s-1,c.y*s-1,3,3);}
 
-  // Пульсация микрофона
+  // пульсация микрофона
   if (analyser && micOn){
     const t=new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(t);
     const lvl=Math.max(...t.map(v=>Math.abs(v-128)));
