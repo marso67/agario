@@ -13,54 +13,77 @@
   canvas#game{display:none}
   body.playing canvas#game{display:block}
 
-  #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:24px}
-  #chatPanel{position:fixed;left:16px;bottom:16px;width:300px;height:420px;background:#0d1526;
-    border:1px solid #1f2b45;border-radius:14px;display:flex;flex-direction:column}
-  .chat-head{display:flex;justify-content:space-between;padding:12px;color:#8fa1c0;font-size:18px}
-  .chat-body{flex:1;display:flex;align-items:center;justify-content:center;color:#cfd8ea;font-size:18px}
-  .chat-input{display:flex;align-items:center;gap:8px;padding:10px;border-top:1px solid #1f2b45}
-  .chat-input input{flex:1;background:#182338;border:0;border-radius:18px;padding:8px 12px;color:#fff;outline:none}
+  /* ===== МЕНЮ ===== */
+  #menu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;padding:20px;overflow-y:auto}
 
-  #centerCard{display:flex;width:640px;height:480px;border-radius:18px;overflow:hidden;background:var(--card)}
-  .side{width:96px;background:var(--blue);display:flex;flex-direction:column}
-  .side-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:6px;font-size:13px;cursor:pointer;opacity:.95}
-  .side-item.active{background:#0d1526}
-  .side-item .ico{font-size:22px}
-  .content{flex:1;padding:20px 34px;display:flex;flex-direction:column;align-items:center}
-  .online-pill{background:#1c2740;border-radius:16px;padding:6px 16px;font-size:14px}
-  .content hr{width:100%;border:0;border-top:2px solid #fff;margin:14px 0 22px}
-  .avatar{width:150px;height:150px;border-radius:50%;background:#cfd4da;color:#7c828b;
-    display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;
-    background-image:radial-gradient(circle at 50% 35%, #e8ebef 28%, transparent 29%),
-      radial-gradient(circle at 50% 115%, #e8ebef 42%, transparent 43%)}
-  .nick-wrap{margin-top:22px;display:flex;align-items:center;gap:8px}
-  #nick{width:230px;border:0;border-radius:18px;padding:10px 14px;font-size:15px;outline:none}
-  #colorDot{width:22px;height:22px;border-radius:50%;background:#999;cursor:pointer;border:0}
-  .btns{margin-top:34px;display:flex;gap:16px}
-  .btn{border:0;border-radius:20px;padding:12px 22px;font-size:13px;font-weight:bold;
-    letter-spacing:.5px;cursor:pointer;display:flex;align-items:center;gap:8px}
+  /* Верхние счётчики */
+  #topCounters{display:flex;gap:12px;margin-bottom:20px}
+  .counter{background:#1c2740;border-radius:16px;padding:6px 16px;font-size:14px;color:#cfd8ea}
+  .counter b{color:#fff}
+
+  /* Основная область */
+  #mainArea{display:flex;gap:24px;align-items:flex-start;max-width:1200px;width:100%}
+
+  /* Карточка с картинкой */
+  #startCard{background:#131c31;border-radius:18px;padding:24px;width:380px;flex-shrink:0}
+  #startImage{width:100%;height:220px;border-radius:12px;
+    background:linear-gradient(180deg,#87ceeb 0%,#fff 40%,#f0f8ff 60%,#87ceeb 100%);
+    position:relative;overflow:hidden;margin-bottom:20px}
+  #startImage::before{content:'';position:absolute;inset:0;
+    background:radial-gradient(circle at 50% 30%,rgba(255,255,255,0.9) 0%,transparent 50%)}
+  #startImage::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+    width:60%;height:40%;
+    background:linear-gradient(180deg,transparent 0%,rgba(255,255,255,0.3) 100%);
+    clip-path:polygon(40% 100%,60% 100%,55% 0%,45% 0%)}
+
+  .btns{display:flex;gap:12px;margin-bottom:16px}
+  .btn{border:0;border-radius:20px;padding:12px 22px;font-size:14px;font-weight:bold;
+    cursor:pointer;display:flex;align-items:center;gap:8px;flex:1;justify-content:center}
   .btn.white{background:#fff;color:#2b6ef6}
   .btn.blue{background:var(--blue);color:#fff}
 
-  #statsPanel{width:300px;background:var(--card);border-radius:14px;padding:14px 16px}
-  .stats-head{display:flex;justify-content:space-between;align-items:center;background:var(--blue);
-    margin:-14px -16px 12px;padding:12px 16px;border-radius:14px 14px 0 0;font-size:18px;font-weight:bold}
-  .stats-head .pill{font-size:11px;background:#fff;color:var(--blue);border-radius:12px;padding:4px 10px;font-weight:bold}
-  .sub{display:inline-block;background:#1c2740;border-radius:12px;padding:4px 10px;font-size:13px;margin-bottom:10px}
-  .top-row{display:flex;align-items:center;gap:10px;padding:8px 2px;font-size:14px}
-  .top-row .pts{margin-left:auto;font-size:12px}
-  .top-row .ava{width:26px;height:26px;border-radius:50%;border:2px solid #c9a227}
-  .r1{color:#f1c40f}.r2{color:#bdc3c7}.r3{color:#e67e22}
+  .nick-wrap{display:flex;align-items:center;gap:8px;background:#1c2740;border-radius:20px;padding:4px}
+  #nick{flex:1;background:transparent;border:0;padding:10px 14px;color:#fff;font-size:14px;outline:none}
+  #colorDot{width:28px;height:28px;border-radius:50%;background:#ffa502;cursor:pointer;border:0}
 
+  /* Карточка статистики */
+  #statsCard{background:#131c31;border-radius:18px;padding:20px;flex:1;min-width:400px}
+  .stats-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .stats-head h2{margin:0;font-size:20px}
+  .period{background:#1c2740;border-radius:12px;padding:6px 12px;font-size:13px;cursor:pointer}
+
+  .stats-table{width:100%;border-collapse:collapse}
+  .stats-table th{text-align:left;padding:8px;color:#8fa1c0;font-size:13px;font-weight:normal;border-bottom:1px solid #1f2b45}
+  .stats-table td{padding:10px 8px;font-size:14px;border-bottom:1px solid #1f2b45}
+  .stats-table .pos{width:60px;text-align:center}
+  .stats-table .mass{width:100px;text-align:right}
+  .stats-table .skin{width:40px}
+  .skin-circle{width:32px;height:32px;border-radius:50%;border:2px solid #c9a227}
+  .pos-1{color:#f1c40f;font-weight:bold}
+  .pos-2{color:#bdc3c7}
+  .pos-3{color:#e67e22}
+
+  /* Топ Сейчас */
+  #topNow{position:fixed;top:20px;right:20px;background:#131c31;border-radius:12px;padding:14px;
+    width:200px;max-height:400px;overflow-y:auto}
+  #topNow h3{margin:0 0 10px;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+  #topNow h3 span{cursor:pointer;color:#8fa1c0}
+  .top-item{padding:4px 0;font-size:13px;display:flex;align-items:center;gap:8px}
+  .top-item .num{width:20px;color:#8fa1c0}
+  .top-item .name{flex:1}
+  .top-item .badge{background:#c0392b;color:#fff;border-radius:8px;padding:2px 6px;font-size:10px}
+  .top-item .star{color:#f1c40f}
+
+  /* HUD */
   #hud{position:fixed;top:10px;left:12px;font-size:14px;color:#cfd8ea;display:none}
   body.playing #hud{display:block}
   #minimap{position:fixed;right:12px;bottom:12px;width:160px;height:160px;background:#0d1526cc;
     border:1px solid #1f2b45;border-radius:8px;display:none}
   body.playing #minimap{display:block}
 
+  /* Микрофон */
   #micBtn{position:fixed;left:16px;bottom:16px;width:52px;height:52px;border-radius:50%;
-    border:0;background:#1c2740;color:#fff;cursor:pointer;display:none;align-items:center;
+    border:0;background:var(--blue);color:#fff;cursor:pointer;display:none;align-items:center;
     justify-content:center;box-shadow:0 0 0 0 rgba(43,110,246,.6);transition:.2s}
   body.playing #micBtn{display:flex}
   #micBtn.on{background:var(--blue)}
@@ -68,70 +91,80 @@
   #micBtn svg{width:24px;height:24px}
   #micBtn.talking{box-shadow:0 0 0 10px rgba(43,110,246,.25)}
 
-  #pauseOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;
-    align-items:center;justify-content:center;font-size:48px;font-weight:bold;color:#fff;z-index:100}
-  body.paused #pauseOverlay{display:flex}
+  /* Кнопка паузы */
+  #pauseBtn{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+    background:#1c2740;border:1px solid #2b6ef6;border-radius:24px;padding:12px 28px;
+    color:#fff;font-size:16px;font-weight:bold;cursor:pointer;display:none;
+    align-items:center;gap:8px;z-index:50}
+  body.playing #pauseBtn{display:flex}
+  #pauseBtn:hover{background:#2b6ef6}
 </style>
 </head>
 <body>
 
+<!-- ===== МЕНЮ ===== -->
 <div id="menu">
-  <div id="chatPanel">
-    <div class="chat-head"><span>🌐</span><span>≡</span><span>✕</span></div>
-    <div class="chat-body">Чат (демо-режим)</div>
-    <div class="chat-input"><span>😎</span><input placeholder="Напишите сообщение..."></div>
+  <div id="topCounters">
+    <div class="counter">Максимум: <b id="maxOnline">712</b></div>
+    <div class="counter">Сейчас: <b id="curOnline">0</b></div>
   </div>
 
-  <div id="centerCard">
-    <div class="side">
-      <div class="side-item"><span class="ico">🖼️</span>Скины</div>
-      <div class="side-item active"><span class="ico">🏠</span>Главная</div>
-      <div class="side-item"><span class="ico">⭐</span>Рейтинг</div>
-    </div>
-    <div class="content">
-      <div class="online-pill">Онлайн: <span id="onlineCount">84</span></div>
-      <hr>
-      <div class="avatar">ДОБАВИТЬ +</div>
-      <div class="nick-wrap">
-        <input id="nick" placeholder="nick" maxlength="15">
-        <button id="colorDot" title="Цвет"></button>
-      </div>
+  <div id="mainArea">
+    <!-- Карточка старта -->
+    <div id="startCard">
+      <div id="startImage"></div>
       <div class="btns">
-        <button class="btn white" id="spectateBtn">👁 НАБЛЮДАТЬ</button>
+        <button class="btn white" id="spectateBtn">👁 Наблюдать</button>
         <button class="btn blue" id="playBtn">▶ ИГРАТЬ</button>
       </div>
+      <div class="nick-wrap">
+        <input id="nick" placeholder="nick" maxlength="15">
+        <button id="colorDot" title="Перемешать цвет"></button>
+      </div>
+    </div>
+
+    <!-- Статистика -->
+    <div id="statsCard">
+      <div class="stats-head">
+        <h2>Статистика</h2>
+        <div class="period">Сегодня ⌄</div>
+      </div>
+      <table class="stats-table">
+        <thead><tr><th class="pos">Позиция</th><th>Ник</th><th class="mass">Масса</th><th class="skin">Скин</th></tr></thead>
+        <tbody id="statsBody"></tbody>
+      </table>
     </div>
   </div>
 
-  <div id="statsPanel">
-    <div class="stats-head">Статистика <span class="pill">Всё время ▲</span></div>
-    <span class="sub">Топ игроков</span>
-    <div class="top-row"><span class="r1">1</span> Jeff <span class="pts r1">126 очков</span><span class="ava" style="background:#e74c3c"></span></div>
-    <div class="top-row"><span class="r2">2</span> sky <span class="pts r2">86 очков</span><span class="ava" style="background:#3498db"></span></div>
-    <div class="top-row"><span class="r3">3</span> Po <span class="pts r3">58 очков</span><span class="ava" style="background:#8e44ad"></span></div>
+  <!-- Топ Сейчас -->
+  <div id="topNow">
+    <h3>Топ Сейчас <span>✕</span></h3>
+    <div id="topNowList"></div>
   </div>
 </div>
 
+<!-- ===== ИГРА ===== -->
 <canvas id="game"></canvas>
-<div id="hud">Масса: <b id="mass">20</b> · Клеток: <span id="cellCount">1</span>/16 · Позиция: <span id="pos"></span></div>
+<div id="hud">Масса: <b id="mass">20</b> · Позиция: <span id="pos"></span></div>
 <canvas id="minimap" width="160" height="160"></canvas>
 
 <button id="micBtn" title="Микрофон">
   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
 </button>
 
-<div id="pauseOverlay">⏸ ПАУЗА (F)</div>
+<button id="pauseBtn">Pause ⏸</button>
 
 <script>
 const CFG = {
   WORLD: 14142,
   FOOD_COUNT: 3000,
+  FOOD_MASS: 20,
   VIRUS_COUNT: 70,
   BOTS: 40,
   BASE_SPEED: 3.25,
   MASS_EXP: 0.44,
   RESPAWN_MS: 10000,
-  MAX_CELLS: 16,
+  MAX_CELLS: 14,
   MIN_CELL_MASS: 10,
   MERGE_COOLDOWN: 20,
   EJECT_MASS: 10
@@ -147,10 +180,12 @@ addEventListener('resize', () => { W=innerWidth; H=innerHeight; canvas.width=W; 
 const mouse = { x: W/2, y: H/2 };
 addEventListener('mousemove', e => { mouse.x=e.clientX; mouse.y=e.clientY; });
 
-// Игрок теперь массив клеток
+const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff','#e74c3c','#3498db','#9b59b6','#1abc9c','#f1c40f','#e67e22'];
+const rndColor = () => COLORS[(Math.random()*COLORS.length)|0];
+
 const player = {
   nick: 'nick',
-  color: '#ff4757',
+  color: rndColor(),
   cells: [{ x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, vx: 0, vy: 0, mergeCooldown: 0 }]
 };
 
@@ -159,7 +194,6 @@ let spectate = false, running = false, paused = false;
 
 const getR = m => Math.sqrt(m) * 4;
 const rnd = (a,b)=> a + Math.random()*(b-a);
-const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff'];
 
 function speedFor(mass){
   return Math.max(0.6, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.MASS_EXP));
@@ -241,15 +275,11 @@ function split(){
 addEventListener('keydown', e => {
   if (!running) return;
   const key = e.key.toLowerCase();
-  if (key === 'f' || key === 'а') {
-    paused = !paused;
-    document.body.classList.toggle('paused', paused);
-  }
+  if (key === 'f' || key === 'а') { togglePause(); }
   if (key === ' ' && !paused) { split(); e.preventDefault(); }
   if ((key === 'w' || key === 'ц') && !paused) ejectMass();
 });
 
-// Зум колёсиком
 addEventListener('wheel', e => {
   if (!running) return;
   cam.zoom *= e.deltaY > 0 ? 0.9 : 1.1;
@@ -257,16 +287,32 @@ addEventListener('wheel', e => {
   e.preventDefault();
 }, { passive: false });
 
+/* ===== ПАУЗА ===== */
+const pauseBtn = document.getElementById('pauseBtn');
+function togglePause(){
+  paused = !paused;
+  pauseBtn.innerHTML = paused ? 'Play ▶' : 'Pause ⏸';
+}
+pauseBtn.onclick = togglePause;
+
 /* ===== МЕНЮ ===== */
 document.getElementById('playBtn').onclick = () => start(false);
 document.getElementById('spectateBtn').onclick = () => start(true);
 document.getElementById('colorDot').onclick = e => {
-  player.color = COLORS[(COLORS.indexOf(player.color)+1)%COLORS.length];
+  player.color = rndColor();
   e.target.style.background = player.color;
 };
+
 function start(spec){
   player.nick = document.getElementById('nick').value || 'nick';
+  player.color = rndColor();
+  player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx: 0, vy: 0, mergeCooldown: 0, nick: player.nick, color: player.color }];
+  cam.x = player.cells[0].x; cam.y = player.cells[0].y; cam.zoom = 1;
+  document.getElementById('colorDot').style.background = player.color;
+
   spectate = spec;
+  paused = false;
+  pauseBtn.innerHTML = 'Pause ⏸';
   document.body.classList.add('playing');
   running = true;
   requestMic();
@@ -319,187 +365,235 @@ function drawVirus(v){
   ctx.restore();
 }
 
+/* ===== СТАТИСТИКА ===== */
+function generateStats(){
+  const tbody = document.getElementById('statsBody');
+  tbody.innerHTML = '';
+  const masses = [112184, 82979, 79513, 75743, 74917, 72683, 72348, 67873, 67447, 64139];
+  for (let i=0;i<10;i++){
+    const tr = document.createElement('tr');
+    const posClass = i<3 ? `pos-${i+1}` : '';
+    tr.innerHTML = `
+      <td class="pos ${posClass}">${i+1}</td>
+      <td>Ник</td>
+      <td class="mass">${masses[i]}</td>
+      <td class="skin"><div class="skin-circle" style="background:${rndColor()}"></div></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+generateStats();
+setInterval(generateStats, 60000); // обновление раз в минуту
+
+/* ===== ТОП СЕЙЧАС ===== */
+const topNames = ['rrrrr','ZZZ','ЯгодКАН','СТУДЕНТ','Сталин','огуша','death','Зая','ЕДИНИЦА LAG','111'];
+function renderTopNow(){
+  const list = document.getElementById('topNowList');
+  list.innerHTML = '';
+  topNames.forEach((name,i)=>{
+    const div = document.createElement('div');
+    div.className = 'top-item';
+    let badge = '';
+    if (name === 'ЯгодКАН') badge = '<span class="badge">103</span>';
+    if (name === 'death') badge = '<span class="badge">185</span>';
+    const star = ['СТУДЕНТ','Сталин'].includes(name) ? '<span class="star">⭐</span>' : '';
+    div.innerHTML = `<span class="num">${i+1}.</span><span class="name">${star}${name}</span>${badge}`;
+    list.appendChild(div);
+  });
+}
+renderTopNow();
+
+/* Счётчики онлайна */
+let curOnline = 0;
+setInterval(()=>{
+  curOnline = Math.floor(Math.random()*50)+10;
+  document.getElementById('curOnline').textContent = curOnline;
+}, 5000);
+
 /* ===== ИГРОВОЙ ЦИКЛ ===== */
 function animate(){
   if (!running) return;
   requestAnimationFrame(animate);
-  if (paused) return;
 
   ctx.fillStyle = '#0a0f1c'; ctx.fillRect(0,0,W,H);
 
-  // Камера следует за центром масс игрока
-  let totalMass = 0, cx = 0, cy = 0;
-  for (const cell of player.cells){
-    totalMass += cell.mass;
-    cx += cell.x * cell.mass;
-    cy += cell.y * cell.mass;
-  }
-  cx /= totalMass; cy /= totalMass;
-  cam.x += (cx-cam.x)*0.12; cam.y += (cy-cam.y)*0.12;
-  const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(totalMass), .55)));
-  cam.zoom += (targetZoom-cam.zoom)*0.08;
-
-  ctx.save();
-  ctx.translate(W/2, H/2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.x, -cam.y);
-
-  // сетка + границы
-  ctx.strokeStyle='#1a2438'; ctx.lineWidth=1/cam.zoom;
-  const step=100, x0=Math.max(0,(cam.x-W/2/cam.zoom)/step|0)*step, x1=Math.min(CFG.WORLD,cam.x+W/2/cam.zoom),
-        y0=Math.max(0,(cam.y-H/2/cam.zoom)/step|0)*step, y1=Math.min(CFG.WORLD,cam.y+H/2/cam.zoom);
-  ctx.beginPath();
-  for(let x=x0;x<x1;x+=step){ctx.moveTo(x,y0);ctx.lineTo(x,y1);}
-  for(let y=y0;y<y1;y+=step){ctx.moveTo(x0,y);ctx.lineTo(x1,y);}
-  ctx.stroke();
-  ctx.strokeStyle='#c0392b'; ctx.lineWidth=6/cam.zoom;
-  ctx.strokeRect(0,0,CFG.WORLD,CFG.WORLD);
-
-  // ДВИЖЕНИЕ КЛЕТОК ИГРОКА
-  for (const cell of player.cells){
-    const wx = (mouse.x-W/2)/cam.zoom + cam.x, wy = (mouse.y-H/2)/cam.zoom + cam.y;
-    const dx = wx - cell.x, dy = wy - cell.y;
-    const d = Math.hypot(dx, dy);
-    if (d > 2){
-      const sp = speedFor(cell.mass);
-      cell.vx += (dx/d) * sp * 0.15;
-      cell.vy += (dy/d) * sp * 0.15;
+  if (!paused){
+    let totalMass = 0, cx = 0, cy = 0;
+    for (const cell of player.cells){
+      totalMass += cell.mass;
+      cx += cell.x * cell.mass;
+      cy += cell.y * cell.mass;
     }
-    cell.vx *= 0.88;
-    cell.vy *= 0.88;
-    cell.x += cell.vx;
-    cell.y += cell.vy;
-    cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
-    cell.y = Math.max(0, Math.min(CFG.WORLD, cell.y));
-    cell.r = getR(cell.mass);
-    if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1/60;
-  }
+    cx /= totalMass; cy /= totalMass;
+    cam.x += (cx-cam.x)*0.12; cam.y += (cy-cam.y)*0.12;
+    const targetZoom = Math.max(.3, Math.min(1.6, Math.pow(30/getR(totalMass), .55)));
+    cam.zoom += (targetZoom-cam.zoom)*0.08;
 
-  // ПРИТЯЖЕНИЕ И СЛИЯНИЕ КЛЕТОК
-  for (let i=0; i<player.cells.length; i++){
-    for (let j=i+1; j<player.cells.length; j++){
-      const a = player.cells[i], b = player.cells[j];
-      if (a.mergeCooldown > 0 || b.mergeCooldown > 0) continue;
-      const dx = b.x - a.x, dy = b.y - a.y;
+    ctx.save();
+    ctx.translate(W/2, H/2); ctx.scale(cam.zoom, cam.zoom); ctx.translate(-cam.x, -cam.y);
+
+    ctx.strokeStyle='#1a2438'; ctx.lineWidth=1/cam.zoom;
+    const step=100, x0=Math.max(0,(cam.x-W/2/cam.zoom)/step|0)*step, x1=Math.min(CFG.WORLD,cam.x+W/2/cam.zoom),
+          y0=Math.max(0,(cam.y-H/2/cam.zoom)/step|0)*step, y1=Math.min(CFG.WORLD,cam.y+H/2/cam.zoom);
+    ctx.beginPath();
+    for(let x=x0;x<x1;x+=step){ctx.moveTo(x,y0);ctx.lineTo(x,y1);}
+    for(let y=y0;y<y1;y+=step){ctx.moveTo(x0,y);ctx.lineTo(x1,y);}
+    ctx.stroke();
+    ctx.strokeStyle='#c0392b'; ctx.lineWidth=6/cam.zoom;
+    ctx.strokeRect(0,0,CFG.WORLD,CFG.WORLD);
+
+    // ДВИЖЕНИЕ КЛЕТОК ИГРОКА
+    for (const cell of player.cells){
+      const wx = (mouse.x-W/2)/cam.zoom + cam.x, wy = (mouse.y-H/2)/cam.zoom + cam.y;
+      const dx = wx - cell.x, dy = wy - cell.y;
       const d = Math.hypot(dx, dy);
-      const minDist = getR(a.mass) + getR(b.mass);
-      if (d < minDist * 0.8){
-        a.mass += b.mass;
-        player.cells.splice(j, 1);
-        j--;
-      } else {
-        const force = 0.3;
-        a.vx += (dx/d) * force;
-        a.vy += (dy/d) * force;
-        b.vx -= (dx/d) * force;
-        b.vy -= (dy/d) * force;
+      if (d > 2){
+        const sp = speedFor(cell.mass);
+        cell.vx += (dx/d) * sp * 0.15;
+        cell.vy += (dy/d) * sp * 0.15;
+      }
+      cell.vx *= 0.88;
+      cell.vy *= 0.88;
+      cell.x += cell.vx;
+      cell.y += cell.vy;
+      cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
+      cell.y = Math.max(0, Math.min(CFG.WORLD, cell.y));
+      cell.r = getR(cell.mass);
+      if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1/60;
+    }
+
+    // ПРИТЯЖЕНИЕ И СЛИЯНИЕ КЛЕТОК
+    for (let i=0; i<player.cells.length; i++){
+      for (let j=i+1; j<player.cells.length; j++){
+        const a = player.cells[i], b = player.cells[j];
+        if (a.mergeCooldown > 0 || b.mergeCooldown > 0) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy);
+        const minDist = getR(a.mass) + getR(b.mass);
+        if (d < minDist * 0.8){
+          a.mass += b.mass;
+          player.cells.splice(j, 1);
+          j--;
+        } else {
+          const force = 0.3;
+          a.vx += (dx/d) * force;
+          a.vy += (dy/d) * force;
+          b.vx -= (dx/d) * force;
+          b.vy -= (dy/d) * force;
+        }
       }
     }
-  }
 
-  // ИИ ботов
-  for (const b of bots){
-    b.r = getR(b.mass);
-    if (!b.tx || Math.hypot(b.tx-b.x,b.ty-b.y)<20 || Math.random()<0.015){
-      const f = foods[(Math.random()*foods.length)|0]; if(f){b.tx=f.x; b.ty=f.y;}
+    // ИИ ботов
+    for (const b of bots){
+      b.r = getR(b.mass);
+      if (!b.tx || Math.hypot(b.tx-b.x,b.ty-b.y)<20 || Math.random()<0.015){
+        const f = foods[(Math.random()*foods.length)|0]; if(f){b.tx=f.x; b.ty=f.y;}
+      }
+      const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=speedFor(b.mass);
+      b.x+= (b.tx-b.x)/d*sp; b.y+=(b.ty-b.y)/d*sp;
+      b.x=Math.max(0,Math.min(CFG.WORLD,b.x)); b.y=Math.max(0,Math.min(CFG.WORLD,b.y));
     }
-    const d = Math.hypot(b.tx-b.x,b.ty-b.y)||1, sp=speedFor(b.mass);
-    b.x+= (b.tx-b.x)/d*sp; b.y+=(b.ty-b.y)/d*sp;
-    b.x=Math.max(0,Math.min(CFG.WORLD,b.x)); b.y=Math.max(0,Math.min(CFG.WORLD,b.y));
-  }
 
-  // ПОЕДАНИЕ ЕДЫ (ближайшей клеткой игрока)
-  const allCells = [...player.cells, ...bots];
-  for (const c of allCells){
-    for (let i=foods.length-1;i>=0;i--){
-      const f=foods[i];
-      if (Math.abs(f.x-c.x)<c.r && Math.abs(f.y-c.y)<c.r){
-        c.mass += f.r*f.r*0.05; foods.splice(i,1);
+    // ПОЕДАНИЕ ЕДЫ
+    const allCells = [...player.cells, ...bots];
+    for (const c of allCells){
+      for (let i=foods.length-1;i>=0;i--){
+        const f=foods[i];
+        if (Math.abs(f.x-c.x)<c.r && Math.abs(f.y-c.y)<c.r){
+          c.mass += CFG.FOOD_MASS;
+          foods.splice(i,1);
+        }
       }
     }
-  }
 
-  // ПОЕДАНИЕ КУСТОВ
-  for (const c of allCells){
-    for (let i=viruses.length-1;i>=0;i--){
-      const v=viruses[i];
-      if (c.r > v.r*1.5 && Math.hypot(v.x-c.x, v.y-c.y) < c.r){
-        c.mass += v.mass; viruses.splice(i,1);
+    // ПОЕДАНИЕ КУСТОВ
+    for (const c of allCells){
+      for (let i=viruses.length-1;i>=0;i--){
+        const v=viruses[i];
+        if (c.r > v.r*1.5 && Math.hypot(v.x-c.x, v.y-c.y) < c.r){
+          c.mass += v.mass; viruses.splice(i,1);
+        }
       }
     }
-  }
 
-  // ПОЕДАНИЕ ПОРОШКОВ (выброшенная масса)
-  for (const c of allCells){
+    // ПОЕДАНИЕ ПОРОШКОВ
+    for (const c of allCells){
+      for (let i=pellets.length-1;i>=0;i--){
+        const p=pellets[i];
+        if (Math.abs(p.x-c.x)<c.r && Math.abs(p.y-c.y)<c.r){
+          c.mass += p.mass; pellets.splice(i,1);
+        }
+      }
+    }
+
+    // ПОЕДАНИЕ ДРУГ ДРУГА
+    for (let i=0;i<allCells.length;i++){
+      for (let j=0;j<allCells.length;j++){
+        if (i===j) continue;
+        const a=allCells[i], b=allCells[j];
+        if (a.r > b.r*1.15 && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
+          a.mass += b.mass;
+          const idx = player.cells.indexOf(b);
+          if (idx >= 0){ player.cells.splice(idx,1); }
+          if (player.cells.length === 0){
+            player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx:0, vy:0, mergeCooldown:0, nick: player.nick, color: player.color }];
+            player.color = rndColor();
+          }
+          if (bots.includes(b)) Object.assign(b, spawnBot());
+        }
+      }
+    }
+
+    // Движение порошков
     for (let i=pellets.length-1;i>=0;i--){
       const p=pellets[i];
-      if (Math.abs(p.x-c.x)<c.r && Math.abs(p.y-c.y)<c.r){
-        c.mass += p.mass; pellets.splice(i,1);
-      }
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.9; p.vy *= 0.9;
+      p.x = Math.max(0, Math.min(CFG.WORLD, p.x));
+      p.y = Math.max(0, Math.min(CFG.WORLD, p.y));
     }
-  }
 
-  // ПОЕДАНИЕ ДРУГ ДРУГА
-  for (let i=0;i<allCells.length;i++){
-    for (let j=0;j<allCells.length;j++){
-      if (i===j) continue;
-      const a=allCells[i], b=allCells[j];
-      if (a.r > b.r*1.15 && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
-        a.mass += b.mass;
-        if (b===player.cells[0]){ player.cells[0].x=CFG.WORLD/2; player.cells[0].y=CFG.WORLD/2; player.cells[0].mass=20; }
-        else if (bots.includes(b)) Object.assign(b, spawnBot());
-      }
+    // РЕНДЕР
+    const pad = 80/cam.zoom;
+    const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad
+                     && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
+
+    for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
+    for (const v of viruses) if (inView(v)) drawVirus(v);
+    for (const p of pellets) if (inView(p)){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
+    for (const c of allCells) if (inView(c)){
+      ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
+      const fontSize = Math.max(12, c.r/2.5);
+      ctx.font=`bold ${fontSize}px Arial`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3/cam.zoom;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(c.nick || '', c.x, c.y);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(c.nick || '', c.x, c.y);
     }
-  }
+    ctx.restore();
 
-  // Движение порошков
-  for (let i=pellets.length-1;i>=0;i--){
-    const p=pellets[i];
-    p.x += p.vx; p.y += p.vy;
-    p.vx *= 0.9; p.vy *= 0.9;
-    p.x = Math.max(0, Math.min(CFG.WORLD, p.x));
-    p.y = Math.max(0, Math.min(CFG.WORLD, p.y));
-  }
+    // HUD
+    document.getElementById('mass').textContent = Math.round(totalMass);
+    document.getElementById('pos').textContent = `${cx|0}, ${cy|0}`;
 
-  // РЕНДЕР
-  const pad = 80/cam.zoom;
-  const inView = o => o.x>cam.x-W/2/cam.zoom-pad && o.x<cam.x+W/2/cam.zoom+pad
-                   && o.y>cam.y-H/2/cam.zoom-pad && o.y<cam.y+H/2/cam.zoom+pad;
+    // миникарта
+    mm.fillStyle='#0d1526'; mm.fillRect(0,0,160,160);
+    const s=160/CFG.WORLD;
+    mm.strokeStyle='#2b6ef6'; mm.strokeRect(cam.x*s-10,cam.y*s-10,20,20);
+    mm.fillStyle='#22c55e'; for(const v of viruses){mm.fillRect(v.x*s-1,v.y*s-1,2,2);}
+    mm.fillStyle='#fff'; for(const b of bots){mm.fillRect(b.x*s,b.y*s,2,2);}
+    mm.fillStyle=player.color; for(const c of player.cells){mm.fillRect(c.x*s-1,c.y*s-1,3,3);}
 
-  for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
-  for (const v of viruses) if (inView(v)) drawVirus(v);
-  for (const p of pellets) if (inView(p)){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
-  for (const c of allCells) if (inView(c)){
-    ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
-    // Ник с обводкой как на скриншоте
-    const fontSize = Math.max(12, c.r/2.5);
-    ctx.font=`bold ${fontSize}px Arial`;
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3/cam.zoom;
-    ctx.lineJoin = 'round';
-    ctx.strokeText(c.nick, c.x, c.y);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(c.nick, c.x, c.y);
-  }
-  ctx.restore();
-
-  // HUD
-  document.getElementById('mass').textContent = Math.round(totalMass);
-  document.getElementById('cellCount').textContent = player.cells.length;
-  document.getElementById('pos').textContent = `${cx|0}, ${cy|0}`;
-
-  // миникарта
-  mm.fillStyle='#0d1526'; mm.fillRect(0,0,160,160);
-  const s=160/CFG.WORLD;
-  mm.strokeStyle='#2b6ef6'; mm.strokeRect(cam.x*s-10,cam.y*s-10,20,20);
-  mm.fillStyle='#22c55e'; for(const v of viruses){mm.fillRect(v.x*s-1,v.y*s-1,2,2);}
-  mm.fillStyle='#fff'; for(const b of bots){mm.fillRect(b.x*s,b.y*s,2,2);}
-  mm.fillStyle=player.color; for(const c of player.cells){mm.fillRect(c.x*s-1,c.y*s-1,3,3);}
-
-  // пульсация микрофона
-  if (analyser && micOn){
-    const t=new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(t);
-    const lvl=Math.max(...t.map(v=>Math.abs(v-128)));
-    micBtn.classList.toggle('talking', lvl>12);
+    // пульсация микрофона
+    if (analyser && micOn){
+      const t=new Uint8Array(analyser.frequencyBinCount); analyser.getByteTimeDomainData(t);
+      const lvl=Math.max(...t.map(v=>Math.abs(v-128)));
+      micBtn.classList.toggle('talking', lvl>12);
+    }
   }
 }
 </script>
