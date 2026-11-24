@@ -139,19 +139,35 @@
 <script>
 const CFG = {
   WORLD: 14142,
-  FOOD_COUNT: 100,
+  FOOD_COUNT: 3000,
   FOOD_MASS: 20,
-  VIRUS_COUNT: 10,
+  VIRUS_COUNT: 70,
   BOTS: 40,
   BASE_SPEED: 3.25,
-  RESPAWN_FOOD_MS: 30000,
-  RESPAWN_VIRUS_MS: 120000,
+  MASS_EXP: 0.44,
+  RESPAWN_MS: 10000,
   MAX_CELLS: 14,
   MIN_CELL_MASS: 10,
   MERGE_COOLDOWN: 20,
-  EJECT_MASS: 10,
-  EAT_DIFFERENCE: 100
+  EJECT_MASS: 10
 };
+
+/* ===== СКИНЫ =====
+   Ключ — ник в нижнем регистре, значение — файл картинки в корне репо.
+   Добавить новый скин: одна строка + картинка в репозиторий. */
+const SKINS = {
+  'ракета': 'raketa.png',
+  // 'кот': 'kot.png',
+  // 'пёс': 'pes.png',
+};
+
+// Предзагрузка картинок скинов
+const skinImages = {};
+for (const key in SKINS){
+  const img = new Image();
+  img.src = SKINS[key];
+  skinImages[key] = img;
+}
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -169,7 +185,8 @@ const rndColor = () => COLORS[(Math.random()*COLORS.length)|0];
 const player = {
   nick: 'nick',
   color: rndColor(),
-  cells: [{ x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, vx: 0, vy: 0, mergeCooldown: 0 }]
+  skin: null,   // Image или null
+  cells: [{ x: CFG.WORLD/2, y: CFG.WORLD/2, mass: 20, vx: 0, vy: 0, mergeCooldown: 0, skin: null }]
 };
 
 const cam = { x: player.cells[0].x, y: player.cells[0].y, zoom: 1 };
@@ -182,7 +199,7 @@ const getR = m => Math.sqrt(m) * 4;
 const rnd = (a,b)=> a + Math.random()*(b-a);
 
 function speedFor(mass){
-  return CFG.BASE_SPEED;
+  return Math.max(0.6, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.MASS_EXP));
 }
 
 const foods = [];
@@ -191,19 +208,12 @@ const spawnFood = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(3,5), c
 const viruses = [];
 const spawnVirus = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(28,40), spikes:16, mass:60 });
 
-// Начальный спавн
-for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
-for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
-
-// Добавление новых точек каждые 30 секунд (старые остаются)
-setInterval(() => {
-  for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
-}, CFG.RESPAWN_FOOD_MS);
-
-// Добавление новых кустов каждые 2 минуты (старые остаются)
-setInterval(() => {
-  for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
-}, CFG.RESPAWN_VIRUS_MS);
+function respawnWave(){
+  foods.length = 0;   for (let i=0;i<CFG.FOOD_COUNT;i++)  foods.push(spawnFood());
+  viruses.length = 0; for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
+}
+respawnWave();
+setInterval(respawnWave, CFG.RESPAWN_MS);
 
 const bots = [];
 const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass:rnd(15,400),
@@ -244,14 +254,13 @@ function split(){
     const d = Math.hypot(dx, dy) || 1;
     const impulse = 18;
     const newCell = {
-      x: cell.x + (dx/d) * (getR(half) + 2),
-      y: cell.y + (dy/d) * (getR(half) + 2),
+      x: cell.x + (dx/d) * getR(half),
+      y: cell.y + (dy/d) * getR(half),
       mass: half,
       vx: (dx/d) * impulse,
       vy: (dy/d) * impulse,
       mergeCooldown: CFG.MERGE_COOLDOWN,
-      nick: cell.nick,
-      color: cell.color
+      skin: player.skin
     };
     cell.vx = -(dx/d) * impulse;
     cell.vy = -(dy/d) * impulse;
@@ -300,7 +309,11 @@ function updateOnlineCounters(){
 function start(spec){
   player.nick = document.getElementById('nick').value || 'nick';
   player.color = rndColor();
-  player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx: 0, vy: 0, mergeCooldown: 0, nick: player.nick, color: player.color }];
+  // ⬅ Ищем скин по нику (регистр и пробелы не важны)
+  player.skin = skinImages[player.nick.trim().toLowerCase()] || null;
+
+  player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx: 0, vy: 0, mergeCooldown: 0,
+                    nick: player.nick, color: player.color, skin: player.skin }];
   cam.x = player.cells[0].x; cam.y = player.cells[0].y; cam.zoom = 1;
   document.getElementById('colorDot').style.background = player.color;
 
@@ -520,13 +533,13 @@ function animate(){
       for (let j=0;j<allCells.length;j++){
         if (i===j) continue;
         const a=allCells[i], b=allCells[j];
-        // Правило: можно съесть, если разница в массе >= 100
-        if (a.mass - b.mass >= CFG.EAT_DIFFERENCE && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
+        if (a.r > b.r*1.15 && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
           a.mass += b.mass;
           const idx = player.cells.indexOf(b);
           if (idx >= 0){ player.cells.splice(idx,1); }
           if (player.cells.length === 0){
-            player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx:0, vy:0, mergeCooldown:0, nick: player.nick, color: player.color }];
+            player.cells = [{ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass: 20, vx:0, vy:0, mergeCooldown:0,
+                              nick: player.nick, color: player.color, skin: player.skin }];
             player.color = rndColor();
           }
           if (bots.includes(b)) Object.assign(b, spawnBot());
@@ -549,22 +562,38 @@ function animate(){
     for (const f of foods) if (inView(f)){ ctx.fillStyle=f.color; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.fill(); }
     for (const v of viruses) if (inView(v)) drawVirus(v);
     for (const p of pellets) if (inView(p)){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); }
+
+    // ⬅ РЕНДЕР КЛЕТОК: со скином (картинка + ник снизу) или без (цвет + ник внутри)
     for (const c of allCells) if (inView(c)){
-      ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
+      const hasSkin = c.skin && c.skin.complete && c.skin.naturalWidth;
+
+      if (hasSkin){
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+        ctx.clip();
+        ctx.drawImage(c.skin, c.x - c.r, c.y - c.r, c.r*2, c.r*2);
+        ctx.restore();
+        // тонкая обводка по краю скина
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.lineWidth = 2/cam.zoom;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle=c.color; ctx.beginPath(); ctx.arc(c.x,c.y,c.r,0,7); ctx.fill();
+      }
+
       const fontSize = Math.max(12, c.r/2.5);
       ctx.font=`bold ${fontSize}px Arial`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3/cam.zoom;
       ctx.lineJoin = 'round';
-      ctx.strokeText(c.nick || '', c.x, c.y);
+      const nickY = hasSkin ? c.y + c.r + fontSize*0.9 : c.y;
+      ctx.strokeText(c.nick || '', c.x, nickY);
       ctx.fillStyle = '#fff';
-      ctx.fillText(c.nick || '', c.x, c.y);
-      // Масса под ником
-      ctx.font = `${Math.max(8, c.r/4)}px Arial`;
-      ctx.strokeText(Math.round(c.mass), c.x, c.y + fontSize);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(Math.round(c.mass), c.x, c.y + fontSize);
+      ctx.fillText(c.nick || '', c.x, nickY);
     }
     ctx.restore();
 
