@@ -22,15 +22,11 @@
   #mainArea{display:flex;gap:24px;align-items:flex-start;max-width:800px;width:100%}
 
   #startCard{background:#131c31;border-radius:18px;padding:24px;width:380px;flex-shrink:0}
-  #startImage{width:100%;height:220px;border-radius:12px;
-    background:linear-gradient(180deg,#87ceeb 0%,#fff 40%,#f0f8ff 60%,#87ceeb 100%);
-    position:relative;overflow:hidden;margin-bottom:20px}
-  #startImage::before{content:'';position:absolute;inset:0;
-    background:radial-gradient(circle at 50% 30%,rgba(255,255,255,0.9) 0%,transparent 50%)}
-  #startImage::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);
-    width:60%;height:40%;
-    background:linear-gradient(180deg,transparent 0%,rgba(255,255,255,0.3) 100%);
-    clip-path:polygon(40% 100%,60% 100%,55% 0%,45% 0%)}
+  #startImage{width:100%;height:220px;border-radius:12px;overflow:hidden;margin-bottom:20px;
+    background-image:url('start.png');
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat}
 
   .btns{display:flex;gap:12px;margin-bottom:16px}
   .btn{border:0;border-radius:20px;padding:12px 22px;font-size:14px;font-weight:bold;
@@ -143,17 +139,18 @@
 <script>
 const CFG = {
   WORLD: 14142,
-  FOOD_COUNT: 3000,
+  FOOD_COUNT: 100,
   FOOD_MASS: 20,
-  VIRUS_COUNT: 70,
+  VIRUS_COUNT: 10,
   BOTS: 40,
   BASE_SPEED: 3.25,
-  MASS_EXP: 0.44,
-  RESPAWN_MS: 10000,
+  RESPAWN_FOOD_MS: 30000,
+  RESPAWN_VIRUS_MS: 120000,
   MAX_CELLS: 14,
   MIN_CELL_MASS: 10,
   MERGE_COOLDOWN: 20,
-  EJECT_MASS: 10
+  EJECT_MASS: 10,
+  EAT_DIFFERENCE: 100
 };
 
 const canvas = document.getElementById('game');
@@ -178,7 +175,6 @@ const player = {
 const cam = { x: player.cells[0].x, y: player.cells[0].y, zoom: 1 };
 let spectate = false, running = false, paused = false;
 
-// Реальные счётчики людей (боты не считаются)
 let curOnline = 0;
 let maxOnline = 0;
 
@@ -186,7 +182,7 @@ const getR = m => Math.sqrt(m) * 4;
 const rnd = (a,b)=> a + Math.random()*(b-a);
 
 function speedFor(mass){
-  return Math.max(0.6, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.MASS_EXP));
+  return CFG.BASE_SPEED;
 }
 
 const foods = [];
@@ -195,12 +191,19 @@ const spawnFood = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(3,5), c
 const viruses = [];
 const spawnVirus = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), r:rnd(28,40), spikes:16, mass:60 });
 
-function respawnWave(){
-  foods.length = 0;   for (let i=0;i<CFG.FOOD_COUNT;i++)  foods.push(spawnFood());
-  viruses.length = 0; for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
-}
-respawnWave();
-setInterval(respawnWave, CFG.RESPAWN_MS);
+// Начальный спавн
+for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
+for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
+
+// Добавление новых точек каждые 30 секунд (старые остаются)
+setInterval(() => {
+  for (let i=0;i<CFG.FOOD_COUNT;i++) foods.push(spawnFood());
+}, CFG.RESPAWN_FOOD_MS);
+
+// Добавление новых кустов каждые 2 минуты (старые остаются)
+setInterval(() => {
+  for (let i=0;i<CFG.VIRUS_COUNT;i++) viruses.push(spawnVirus());
+}, CFG.RESPAWN_VIRUS_MS);
 
 const bots = [];
 const spawnBot = () => ({ x:rnd(0,CFG.WORLD), y:rnd(0,CFG.WORLD), mass:rnd(15,400),
@@ -241,12 +244,14 @@ function split(){
     const d = Math.hypot(dx, dy) || 1;
     const impulse = 18;
     const newCell = {
-      x: cell.x + (dx/d) * getR(half),
-      y: cell.y + (dy/d) * getR(half),
+      x: cell.x + (dx/d) * (getR(half) + 2),
+      y: cell.y + (dy/d) * (getR(half) + 2),
       mass: half,
       vx: (dx/d) * impulse,
       vy: (dy/d) * impulse,
-      mergeCooldown: CFG.MERGE_COOLDOWN
+      mergeCooldown: CFG.MERGE_COOLDOWN,
+      nick: cell.nick,
+      color: cell.color
     };
     cell.vx = -(dx/d) * impulse;
     cell.vy = -(dy/d) * impulse;
@@ -286,7 +291,6 @@ document.getElementById('colorDot').onclick = e => {
 };
 
 function updateOnlineCounters(){
-  // Считаем только реальных людей (игрок = 1, боты не считаются)
   curOnline = running ? 1 : 0;
   if (curOnline > maxOnline) maxOnline = curOnline;
   document.getElementById('curOnline').textContent = curOnline;
@@ -516,7 +520,8 @@ function animate(){
       for (let j=0;j<allCells.length;j++){
         if (i===j) continue;
         const a=allCells[i], b=allCells[j];
-        if (a.r > b.r*1.15 && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
+        // Правило: можно съесть, если разница в массе >= 100
+        if (a.mass - b.mass >= CFG.EAT_DIFFERENCE && Math.hypot(a.x-b.x,a.y-b.y) < a.r){
           a.mass += b.mass;
           const idx = player.cells.indexOf(b);
           if (idx >= 0){ player.cells.splice(idx,1); }
@@ -555,6 +560,11 @@ function animate(){
       ctx.strokeText(c.nick || '', c.x, c.y);
       ctx.fillStyle = '#fff';
       ctx.fillText(c.nick || '', c.x, c.y);
+      // Масса под ником
+      ctx.font = `${Math.max(8, c.r/4)}px Arial`;
+      ctx.strokeText(Math.round(c.mass), c.x, c.y + fontSize);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(Math.round(c.mass), c.x, c.y + fontSize);
     }
     ctx.restore();
 
