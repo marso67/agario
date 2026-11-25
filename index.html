@@ -7,9 +7,10 @@
 <style>
   :root { --blue: #2b6ef6; --card: #131c31; --bg: #0a0f1c; --text: #cfd8ea; }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-  body { background: var(--bg); font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; color: var(--text); }
   
-  body.playing:not(.paused) { cursor: none; }
+  /* ⬅️ КУРСОР ТЕПЕРЬ ВСЕГДА ВИДЕН (default) */
+  body { background: var(--bg); font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; color: var(--text); cursor: default; }
+  
   body.playing #menu { display: none; }
   canvas#game { display: none; width: 100vw; height: 100vh; }
   body.playing canvas#game { display: block; }
@@ -130,7 +131,6 @@
 <div id="debugInfo">FPS: <span id="fps">60</span> | Ping: <span id="ping">12</span>ms</div>
 
 <script>
-// ================= КОНФИГУРАЦИЯ С ТОЧНЫМИ КОНСТАНТАМИ ОРИГИНАЛА =================
 const CFG = {
   WORLD: 14142,
   FOOD_COUNT: 3000,
@@ -143,18 +143,13 @@ const CFG = {
   EJECT_MASS: 10,
   EAT_DIFFERENCE: 100,
 
-  // ТОЧНЫЕ ФОРМУЛЫ ОРИГИНАЛА:
   RADIUS_CONSTANT: 4.3, 
-  
   SPEED_CONSTANT: 2.2, 
   SPEED_EXPONENT: 0.435, 
-  
   SPLIT_IMPULSE: 32, 
   SPLIT_FRICTION: 0.88, 
-  
   VIRUS_MASS: 100,
   VIRUS_EXPLODE_PIECES: 16, 
-  
   MERGE_COOLDOWN_SECONDS: 15, 
   MERGE_PUSH_FORCE: 0.5 
 };
@@ -190,12 +185,10 @@ let manualZoom = 1.0;
 const MIN_MANUAL_ZOOM = 0.1;
 const MAX_MANUAL_ZOOM = 4.0;
 
-// ⬅️ ОБНОВЛЕННАЯ ФОРМУЛА РАДИУСА
 const getR = m => Math.sqrt(m) * CFG.RADIUS_CONSTANT;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// ⬅️ ОБНОВЛЕННАЯ ФОРМУЛА СКОРОСТИ
 function speedFor(mass) {
   return Math.max(0.8, CFG.SPEED_CONSTANT * Math.pow(20 / mass, CFG.SPEED_EXPONENT));
 }
@@ -262,28 +255,26 @@ function split() {
       x: cell.x + (dx / d) * offset,
       y: cell.y + (dy / d) * offset,
       mass: half,
-      vx: (dx / d) * CFG.SPLIT_IMPULSE, // ⬅️ Использована константа
-      vy: (dy / d) * CFG.SPLIT_IMPULSE, // ⬅️ Использована константа
-      mergeCooldown: CFG.MERGE_COOLDOWN_SECONDS, // ⬅️ Использована константа
+      vx: (dx / d) * CFG.SPLIT_IMPULSE,
+      vy: (dy / d) * CFG.SPLIT_IMPULSE,
+      mergeCooldown: CFG.MERGE_COOLDOWN_SECONDS,
       nick: player.nick,
       color: player.color,
       skin: player.skin
     };
     cell.vx = -(dx / d) * (CFG.SPLIT_IMPULSE * 0.5);
     cell.vy = -(dy / d) * (CFG.SPLIT_IMPULSE * 0.5);
-    cell.mergeCooldown = CFG.MERGE_COOLDOWN_SECONDS; // ⬅️ Использована константа
+    cell.mergeCooldown = CFG.MERGE_COOLDOWN_SECONDS;
     newCells.push(newCell);
   }
   player.cells.push(...newCells);
 }
 
-// ================= ВЗРЫВ ОТ КУСТА (С НЕРАВНЫМ РАСПРЕДЕЛЕНИЕМ МАССЫ) =================
 function explodeCell(cellsArray, cellIndex, virus) {
   const c = cellsArray[cellIndex];
   const maxPieces = Math.min(CFG.VIRUS_EXPLODE_PIECES, CFG.MAX_CELLS - cellsArray.length + 1);
   if (maxPieces <= 1) return;
 
-  // ⬅️ ОРИГИНАЛЬНАЯ ЛОГИКА: одна часть забирает ~55% массы, остальные делят остаток
   const mainPieceMass = c.mass * 0.55;
   const remainingMass = c.mass - mainPieceMass;
   const smallPieceMass = remainingMass / (maxPieces - 1);
@@ -570,7 +561,6 @@ function animate(now = performance.now()) {
     ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 6 / cam.zoom;
     ctx.strokeRect(0, 0, CFG.WORLD, CFG.WORLD);
 
-    // Движение игрока
     for (const cell of player.cells) {
       const wx = (mouse.x - W / 2) / cam.zoom + cam.x;
       const wy = (mouse.y - H / 2) / cam.zoom + cam.y;
@@ -581,7 +571,6 @@ function animate(now = performance.now()) {
         cell.vx += (dx / d) * sp * 0.15;
         cell.vy += (dy / d) * sp * 0.15;
       }
-      // ⬅️ ИСПОЛЬЗОВАНА КОНСТАНТА ТРЕНИЯ
       cell.vx *= CFG.SPLIT_FRICTION;
       cell.vy *= CFG.SPLIT_FRICTION;
       cell.x += cell.vx;
@@ -592,7 +581,6 @@ function animate(now = performance.now()) {
       if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1 / 60;
     }
 
-    // Слияние клеток игрока
     for (let i = 0; i < player.cells.length; i++) {
       for (let j = i + 1; j < player.cells.length; j++) {
         const a = player.cells[i], b = player.cells[j];
@@ -605,7 +593,6 @@ function animate(now = performance.now()) {
           player.cells.splice(j, 1);
           j--;
         } else {
-          // ⬅️ ИСПОЛЬЗОВАНА КОНСТАНТА СИЛЫ ОТТАЛКИВАНИЯ
           const force = CFG.MERGE_PUSH_FORCE;
           a.vx += (dx / d) * force;
           a.vy += (dy / d) * force;
@@ -615,7 +602,6 @@ function animate(now = performance.now()) {
       }
     }
 
-    // ИИ Ботов
     for (const b of bots) {
       b.r = getR(b.mass);
       let targetX = b.tx, targetY = b.ty;
@@ -656,7 +642,6 @@ function animate(now = performance.now()) {
 
     const allCells = [...player.cells, ...bots];
 
-    // Поедание еды
     for (const c of allCells) {
       for (let i = foods.length - 1; i >= 0; i--) {
         const f = foods[i];
@@ -667,11 +652,9 @@ function animate(now = performance.now()) {
       }
     }
 
-    // Взаимодействие с кустами
     checkVirusCollision(player.cells);
     checkVirusCollision(bots);
 
-    // Поедание порошков
     const updatedAllCells = [...player.cells, ...bots];
     for (const c of updatedAllCells) {
       for (let i = pellets.length - 1; i >= 0; i--) {
@@ -683,7 +666,6 @@ function animate(now = performance.now()) {
       }
     }
 
-    // Поедание игроков/ботов
     let playerDied = false;
     const finalAllCells = [...player.cells, ...bots];
     for (let i = 0; i < finalAllCells.length; i++) {
@@ -708,7 +690,6 @@ function animate(now = performance.now()) {
     }
     if (playerDied) updateOnlineCounters();
 
-    // Движение порошков
     for (let i = pellets.length - 1; i >= 0; i--) {
       const p = pellets[i];
       p.x += p.vx; p.y += p.vy;
@@ -717,7 +698,6 @@ function animate(now = performance.now()) {
       p.y = Math.max(0, Math.min(CFG.WORLD, p.y));
     }
 
-    // Рендеринг
     const pad = 100 / cam.zoom;
     const inView = o => o.x > cam.x - W / 2 / cam.zoom - pad && o.x < cam.x + W / 2 / cam.zoom + pad &&
                         o.y > cam.y - H / 2 / cam.zoom - pad && o.y < cam.y + H / 2 / cam.zoom + pad;
@@ -805,7 +785,6 @@ function animate(now = performance.now()) {
     }
 
   } else {
-    // Рендер на паузе
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(cam.zoom, cam.zoom);
