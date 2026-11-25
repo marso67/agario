@@ -130,24 +130,33 @@
 <div id="debugInfo">FPS: <span id="fps">60</span> | Ping: <span id="ping">12</span>ms</div>
 
 <script>
+// ================= КОНФИГУРАЦИЯ С ТОЧНЫМИ КОНСТАНТАМИ ОРИГИНАЛА =================
 const CFG = {
   WORLD: 14142,
   FOOD_COUNT: 3000,
   FOOD_MASS: 20,
   VIRUS_COUNT: 70,
-  VIRUS_MASS: 100,                  // Масса/порог куста
-  VIRUS_MASS_THRESHOLD_DIFF: 10,    // Необходимая разница: M_cell >= M_bush + 10
-  VIRUS_EXPLODE_PIECES: 16,         // Макс. количество частей при взрыве
-  VIRUS_EXPLODE_FORCE: 30,          // Сила разлёта частей при взрыве
   BOTS: 50,
-  BASE_SPEED: 3.5,
-  MASS_EXP: 0.44,
   RESPAWN_MS: 10000,
   MAX_CELLS: 16,
   MIN_CELL_MASS: 10,
-  MERGE_COOLDOWN: 20,
   EJECT_MASS: 10,
-  EAT_DIFFERENCE: 100
+  EAT_DIFFERENCE: 100,
+
+  // ТОЧНЫЕ ФОРМУЛЫ ОРИГИНАЛА:
+  RADIUS_CONSTANT: 4.3, 
+  
+  SPEED_CONSTANT: 2.2, 
+  SPEED_EXPONENT: 0.435, 
+  
+  SPLIT_IMPULSE: 32, 
+  SPLIT_FRICTION: 0.88, 
+  
+  VIRUS_MASS: 100,
+  VIRUS_EXPLODE_PIECES: 16, 
+  
+  MERGE_COOLDOWN_SECONDS: 15, 
+  MERGE_PUSH_FORCE: 0.5 
 };
 
 const SKINS = { 'ракета': 'raketa.png' };
@@ -181,12 +190,14 @@ let manualZoom = 1.0;
 const MIN_MANUAL_ZOOM = 0.1;
 const MAX_MANUAL_ZOOM = 4.0;
 
-const getR = m => Math.sqrt(m) * 4;
+// ⬅️ ОБНОВЛЕННАЯ ФОРМУЛА РАДИУСА
+const getR = m => Math.sqrt(m) * CFG.RADIUS_CONSTANT;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+// ⬅️ ОБНОВЛЕННАЯ ФОРМУЛА СКОРОСТИ
 function speedFor(mass) {
-  return Math.max(0.8, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.MASS_EXP));
+  return Math.max(0.8, CFG.SPEED_CONSTANT * Math.pow(20 / mass, CFG.SPEED_EXPONENT));
 }
 
 const foods = [];
@@ -246,49 +257,51 @@ function split() {
     const wy = (mouse.y - H / 2) / cam.zoom + cam.y;
     const dx = wx - cell.x, dy = wy - cell.y;
     const d = Math.hypot(dx, dy) || 1;
-    const impulse = 18;
     const offset = getR(half) + 2;
     const newCell = {
       x: cell.x + (dx / d) * offset,
       y: cell.y + (dy / d) * offset,
       mass: half,
-      vx: (dx / d) * impulse,
-      vy: (dy / d) * impulse,
-      mergeCooldown: CFG.MERGE_COOLDOWN,
+      vx: (dx / d) * CFG.SPLIT_IMPULSE, // ⬅️ Использована константа
+      vy: (dy / d) * CFG.SPLIT_IMPULSE, // ⬅️ Использована константа
+      mergeCooldown: CFG.MERGE_COOLDOWN_SECONDS, // ⬅️ Использована константа
       nick: player.nick,
       color: player.color,
       skin: player.skin
     };
-    cell.vx = -(dx / d) * (impulse * 0.5);
-    cell.vy = -(dy / d) * (impulse * 0.5);
-    cell.mergeCooldown = CFG.MERGE_COOLDOWN;
+    cell.vx = -(dx / d) * (CFG.SPLIT_IMPULSE * 0.5);
+    cell.vy = -(dy / d) * (CFG.SPLIT_IMPULSE * 0.5);
+    cell.mergeCooldown = CFG.MERGE_COOLDOWN_SECONDS; // ⬅️ Использована константа
     newCells.push(newCell);
   }
   player.cells.push(...newCells);
 }
 
-// ================= ВЗРЫВ ОТ КУСТА (СТРОГО ПО ТЗ) =================
+// ================= ВЗРЫВ ОТ КУСТА (С НЕРАВНЫМ РАСПРЕДЕЛЕНИЕМ МАССЫ) =================
 function explodeCell(cellsArray, cellIndex, virus) {
   const c = cellsArray[cellIndex];
-  // Ограничиваем количество частей лимитом MAX_CELLS
   const maxPieces = Math.min(CFG.VIRUS_EXPLODE_PIECES, CFG.MAX_CELLS - cellsArray.length + 1);
-  if (maxPieces <= 1) return; // Нельзя делиться, но куст всё равно будет удалён вызывающим кодом
+  if (maxPieces <= 1) return;
 
-  const pieceMass = c.mass / maxPieces;
-  c.mass = pieceMass;
-  c.mergeCooldown = CFG.MERGE_COOLDOWN;
+  // ⬅️ ОРИГИНАЛЬНАЯ ЛОГИКА: одна часть забирает ~55% массы, остальные делят остаток
+  const mainPieceMass = c.mass * 0.55;
+  const remainingMass = c.mass - mainPieceMass;
+  const smallPieceMass = remainingMass / (maxPieces - 1);
+
+  c.mass = mainPieceMass;
+  c.mergeCooldown = CFG.MERGE_COOLDOWN_SECONDS;
 
   const newCells = [];
   for (let k = 1; k < maxPieces; k++) {
     const angle = Math.random() * Math.PI * 2;
-    const offset = getR(pieceMass) + 2;
+    const offset = getR(smallPieceMass) + 2;
     const newCell = {
       x: c.x + Math.cos(angle) * offset,
       y: c.y + Math.sin(angle) * offset,
-      mass: pieceMass,
-      vx: Math.cos(angle) * CFG.VIRUS_EXPLODE_FORCE,
-      vy: Math.sin(angle) * CFG.VIRUS_EXPLODE_FORCE,
-      mergeCooldown: CFG.MERGE_COOLDOWN,
+      mass: smallPieceMass,
+      vx: Math.cos(angle) * CFG.SPLIT_IMPULSE,
+      vy: Math.sin(angle) * CFG.SPLIT_IMPULSE,
+      mergeCooldown: CFG.MERGE_COOLDOWN_SECONDS,
       nick: c.nick,
       color: c.color,
       skin: c.skin
@@ -296,15 +309,13 @@ function explodeCell(cellsArray, cellIndex, virus) {
     newCells.push(newCell);
   }
 
-  // Исходная клетка тоже получает небольшой импульс от центра куста
   const pushAngle = Math.atan2(c.y - virus.y, c.x - virus.x);
-  c.vx += Math.cos(pushAngle) * (CFG.VIRUS_EXPLODE_FORCE * 0.5);
-  c.vy += Math.sin(pushAngle) * (CFG.VIRUS_EXPLODE_FORCE * 0.5);
+  c.vx += Math.cos(pushAngle) * (CFG.SPLIT_IMPULSE * 0.5);
+  c.vy += Math.sin(pushAngle) * (CFG.SPLIT_IMPULSE * 0.5);
 
   cellsArray.push(...newCells);
 }
 
-// ================= ПРОВЕРКА СТОЛКНОВЕНИЙ С КУСТАМИ =================
 function checkVirusCollision(cellsArray) {
   for (let i = viruses.length - 1; i >= 0; i--) {
     const v = viruses[i];
@@ -314,18 +325,15 @@ function checkVirusCollision(cellsArray) {
       const c = cellsArray[j];
       const d = Math.hypot(c.x - v.x, c.y - v.y);
 
-      // Физический контакт: радиус клетки перекрывает центр куста
       if (d < c.r) {
-        if (c.mass >= v.mass + CFG.VIRUS_MASS_THRESHOLD_DIFF) {
-          // ПОГЛОЩЕНИЕ: масса клетки увеличивается, куст исчезает
+        if (c.mass >= v.mass + 10) {
           c.mass += v.mass;
           virusRemoved = true;
-          break; // Куст уничтожен, переходим к следующему кусту
+          break;
         } else {
-          // ВЗРЫВ: клетка делится, куст исчезает
           explodeCell(cellsArray, j, v);
           virusRemoved = true;
-          break; // Куст уничтожен, переходим к следующему кусту
+          break;
         }
       }
     }
@@ -573,8 +581,9 @@ function animate(now = performance.now()) {
         cell.vx += (dx / d) * sp * 0.15;
         cell.vy += (dy / d) * sp * 0.15;
       }
-      cell.vx *= 0.88;
-      cell.vy *= 0.88;
+      // ⬅️ ИСПОЛЬЗОВАНА КОНСТАНТА ТРЕНИЯ
+      cell.vx *= CFG.SPLIT_FRICTION;
+      cell.vy *= CFG.SPLIT_FRICTION;
       cell.x += cell.vx;
       cell.y += cell.vy;
       cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
@@ -596,7 +605,8 @@ function animate(now = performance.now()) {
           player.cells.splice(j, 1);
           j--;
         } else {
-          const force = 0.3;
+          // ⬅️ ИСПОЛЬЗОВАНА КОНСТАНТА СИЛЫ ОТТАЛКИВАНИЯ
+          const force = CFG.MERGE_PUSH_FORCE;
           a.vx += (dx / d) * force;
           a.vy += (dy / d) * force;
           b.vx -= (dx / d) * force;
@@ -644,8 +654,9 @@ function animate(now = performance.now()) {
       b.y = Math.max(0, Math.min(CFG.WORLD, b.y));
     }
 
-    // Поедание еды
     const allCells = [...player.cells, ...bots];
+
+    // Поедание еды
     for (const c of allCells) {
       for (let i = foods.length - 1; i >= 0; i--) {
         const f = foods[i];
@@ -656,9 +667,7 @@ function animate(now = performance.now()) {
       }
     }
 
-    // ==========================================
-    // ВЗАИМОДЕЙСТВИЕ С КУСТАМИ (СТРОГО ПО ТЗ)
-    // ==========================================
+    // Взаимодействие с кустами
     checkVirusCollision(player.cells);
     checkVirusCollision(bots);
 
