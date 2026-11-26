@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Agario</title>
 <style>
-  :root { --blue: #2b6ef6; --card: #131c31; --bg: #0a0f1c; --text: #cfd8ea; }
+  @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;700&display=swap');
+  :root { --blue: #2b6ef6; --card: #131c31; --bg: #070c16; --text: #cfd8ea; }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-  body { background: var(--bg); font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; color: var(--text); cursor: default; }
+  body { background: var(--bg); font-family: 'Ubuntu', Arial, sans-serif; overflow: hidden; color: var(--text); cursor: default; }
   
   body.playing #menu { display: none; }
   canvas#game { display: none; width: 100vw; height: 100vh; }
@@ -52,7 +53,7 @@
   #hud { position: fixed; top: 10px; left: 12px; font-size: 14px; color: var(--text); display: none; z-index: 10; text-shadow: 1px 1px 2px #000; }
   body.playing #hud { display: block; }
   
-  #minimap { position: fixed; right: 12px; bottom: 12px; width: 160px; height: 160px; background: rgba(13, 21, 38, 0.8); border: 1px solid #1f2b45; border-radius: 8px; display: none; z-index: 10; }
+  #minimap { position: fixed; right: 12px; bottom: 12px; width: 140px; height: 140px; background: rgba(13, 21, 38, 0.8); border: 1px solid #1f2b45; border-radius: 8px; display: none; z-index: 10; }
   body.playing #minimap { display: block; }
 
   #topNow { position: fixed; top: 12px; right: 12px; background: rgba(19, 28, 49, 0.85); border-radius: 12px; padding: 14px; width: 200px; max-height: 400px; overflow-y: auto; display: none; z-index: 10; backdrop-filter: blur(4px); }
@@ -113,8 +114,8 @@
 </div>
 
 <canvas id="game"></canvas>
-<div id="hud">Масса: <b id="mass">20</b> · Позиция: <span id="pos">0, 0</span></div>
-<canvas id="minimap" width="160" height="160"></canvas>
+<div id="hud">Масса: <b id="mass">10</b> · Позиция: <span id="pos">0, 0</span> · Клетка: <span id="cellSize">0</span></div>
+<canvas id="minimap" width="140" height="140"></canvas>
 
 <div id="topNow">
   <h3>Топ Сейчас</h3>
@@ -129,30 +130,73 @@
 <div id="debugInfo">FPS: <span id="fps">60</span> | Ping: <span id="ping">12</span>ms</div>
 
 <script>
+// ================= КОНФИГУРАЦИЯ ПО ОРИГИНАЛУ AGAR.SU =================
 const CFG = {
-  WORLD: 14142,
-  FOOD_COUNT: 3000,
-  FOOD_MASS: 5,          // ⬅️ Еда теперь весит 5 единиц
-  FOOD_RADIUS: 10,       // ⬅️ Еда теперь ОДИНАКОВОГО крупного размера
-  VIRUS_COUNT: 70,
-  BOTS: 50,
+  // Карта 10000×10000 (от 0 до 10000 для простоты, в оригинале от -5000 до 5000)
+  WORLD: 10000,
+  WORLD_HALF: 5000,
+  
+  // Еда: масса 1, размер = sqrt(100 * 1) = 10
+  FOOD_MASS: 1,
+  FOOD_COUNT: 800,
+  
+  // Вирусы
+  VIRUS_COUNT: 50,
+  VIRUS_BASE_SIZE: 35,
+  VIRUS_MASS: 100,
+  VIRUS_EXPLODE_PIECES: 16,
+  
+  // Боты
+  BOTS: 40,
+  
+  // Респавн
   RESPAWN_MS: 10000,
+  
+  // Клетки игрока
   MAX_CELLS: 16,
   MIN_CELL_MASS: 10,
-  EJECT_MASS: 15,        // ⬅️ Выброс массы теперь 15 единиц (ровно 3 еды)
+  START_MASS: 10,
+  
+  // Выброс массы
+  EJECT_MASS: 15,
+  EJECT_SIZE: 35,
+  
+  // Поглощение
   EAT_DIFFERENCE: 100,
-
-  RADIUS_CONSTANT: 4.3, 
-  SPEED_CONSTANT: 2.2, 
-  SPEED_EXPONENT: 0.435, 
-  SPLIT_IMPULSE: 32, 
-  SPLIT_FRICTION: 0.88, 
-  VIRUS_MASS: 100,
-  VIRUS_EXPLODE_PIECES: 16, 
-  MERGE_COOLDOWN_SECONDS: 60, // ⬅️ Слияние теперь ровно через 60 секунд (1 минуту)
-  MERGE_PUSH_FORCE: 0.8       // ⬅️ Усилено отталкивание для сохранения зазора
+  
+  // ===== ТОЧНЫЕ ФОРМУЛЫ ОРИГИНАЛА =====
+  // Радиус: size = sqrt(mass * 100) = 10 * sqrt(mass)
+  RADIUS_CONSTANT: 10,
+  
+  // Скорость (эмулируем серверную физику)
+  BASE_SPEED: 2.2,
+  SPEED_EXPONENT: 0.435,
+  
+  // Сплит
+  SPLIT_IMPULSE: 32,
+  SPLIT_FRICTION: 0.88,
+  
+  // Слияние
+  MERGE_COOLDOWN_SECONDS: 15,
+  MERGE_PUSH_FORCE: 0.5,
+  
+  // Камера (оригинальные коэффициенты плавности)
+  CAMERA_POS_SMOOTH: 0.966,  // (29 * old + new) / 30
+  CAMERA_ZOOM_SMOOTH: 0.9,   // (9 * old + new) / 10
+  
+  // Зум
+  MIN_MANUAL_ZOOM: 0.1,
+  MAX_MANUAL_ZOOM: 4.0,
+  
+  // Сетка координат 5x5
+  GRID_CELLS: 5,
+  GRID_LABELS: ['A', 'B', 'C', 'D', 'E'],
+  
+  // Цвета еды из оригинала
+  FOOD_COLORS: ['#ff3333', '#ff9900', '#ffe14a', '#33dd44', '#22c8ff', '#4477ff', '#e040fb', '#ff4d88']
 };
 
+// Скины
 const SKINS = { 'ракета': 'raketa.png' };
 const skinImages = {};
 for (const key in SKINS) {
@@ -161,6 +205,7 @@ for (const key in SKINS) {
   skinImages[key] = img;
 }
 
+// Canvas
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
 const mm = document.getElementById('minimap').getContext('2d');
@@ -171,7 +216,8 @@ addEventListener('resize', () => { W = innerWidth; H = innerHeight; canvas.width
 const mouse = { x: W / 2, y: H / 2 };
 addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
 
-const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff','#e74c3c','#3498db','#9b59b6','#1abc9c','#f1c40f','#e67e22'];
+// Палитра клеток из оригинала (выборка)
+const COLORS = ['#ff4757','#ffa502','#2ed573','#1e90ff','#a55eea','#ff6b81','#7bed9f','#70a1ff','#e74c3c','#3498db','#9b59b6','#1abc9c','#f1c40f','#e67e22','#ff3333','#ff9900','#33dd44','#22c8ff','#e040fb'];
 const rndColor = () => COLORS[(Math.random() * COLORS.length) | 0];
 
 const player = { nick: 'nick', color: rndColor(), skin: null, cells: [] };
@@ -179,53 +225,66 @@ const player = { nick: 'nick', color: rndColor(), skin: null, cells: [] };
 const cam = { x: CFG.WORLD / 2, y: CFG.WORLD / 2, baseZoom: 1, zoom: 1 };
 let spectate = false, running = false, paused = false;
 let curOnline = 0, maxOnline = 0;
-
 let manualZoom = 1.0;
-const MIN_MANUAL_ZOOM = 0.1;
-const MAX_MANUAL_ZOOM = 4.0;
 
-const getR = m => Math.sqrt(m) * CFG.RADIUS_CONSTANT;
+// Формула радиуса из оригинала: size = sqrt(mass * 100) = 10 * sqrt(mass)
+const getR = m => Math.sqrt(m * 100);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
+// Скорость клетки
 function speedFor(mass) {
-  return Math.max(0.8, CFG.SPEED_CONSTANT * Math.pow(20 / mass, CFG.SPEED_EXPONENT));
+  return Math.max(0.8, CFG.BASE_SPEED * Math.pow(20 / mass, CFG.SPEED_EXPONENT));
 }
 
+// Еда с детерминированным позиционированием как в оригинале
 const foods = [];
-// ⬅️ Еда теперь строго одного размера
-const spawnFood = () => ({ x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), r: CFG.FOOD_RADIUS, mass: CFG.FOOD_MASS, color: `hsl(${rnd(0, 360)}, 70%, 55%)` });
-
-const viruses = [];
-const spawnVirus = () => ({ 
-  x: rnd(0, CFG.WORLD), 
-  y: rnd(0, CFG.WORLD), 
-  r: 35, 
-  mass: CFG.VIRUS_MASS, 
-  spikes: 16 
-});
-
-function respawnWave() {
-  for (let i = 0; i < CFG.FOOD_COUNT / 5; i++) foods.push(spawnFood());
-  for (let i = 0; i < CFG.VIRUS_COUNT / 5; i++) viruses.push(spawnVirus());
+function spawnFood(id) {
+  const w = CFG.WORLD;
+  const h = CFG.WORLD;
+  const x = (id % 1000) / 1000 * w;
+  const y = ((id * id) % 1000) / 1000 * h;
+  const mass = CFG.FOOD_MASS + Math.floor(Math.random() * 4); // 1-4
+  const size = Math.ceil(Math.sqrt(100 * mass));
+  const color = CFG.FOOD_COLORS[id % CFG.FOOD_COLORS.length];
+  return { x, y, r: size, mass, color, id };
 }
-for (let i = 0; i < CFG.FOOD_COUNT; i++) foods.push(spawnFood());
-for (let i = 0; i < CFG.VIRUS_COUNT; i++) viruses.push(spawnVirus());
-setInterval(respawnWave, CFG.RESPAWN_MS);
 
+for (let i = 0; i < CFG.FOOD_COUNT; i++) foods.push(spawnFood(i));
+
+// Вирусы
+const viruses = [];
+function spawnVirus(id) {
+  return {
+    x: rnd(0, CFG.WORLD),
+    y: rnd(0, CFG.WORLD),
+    r: CFG.VIRUS_BASE_SIZE + Math.random() * 20,
+    mass: CFG.VIRUS_MASS,
+    spikes: 16,
+    id
+  };
+}
+for (let i = 0; i < CFG.VIRUS_COUNT; i++) viruses.push(spawnVirus(i));
+
+// Респавн еды
+setInterval(() => {
+  for (let i = 0; i < 50; i++) foods.push(spawnFood(foods.length));
+}, CFG.RESPAWN_MS);
+
+// Боты
 const bots = [];
-const spawnBot = () => ({ 
-  x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: rnd(15, 300),
-  nick: 'bot' + ((Math.random() * 999) | 0), color: rndColor(), r: 0, tx: 0, ty: 0, vx: 0, vy: 0 
+const spawnBot = () => ({
+  x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: rnd(10, 200),
+  nick: 'bot' + ((Math.random() * 999) | 0), color: rndColor(), r: 0, tx: 0, ty: 0, vx: 0, vy: 0
 });
 for (let i = 0; i < CFG.BOTS; i++) bots.push(spawnBot());
 
 const pellets = [];
 
-// ⬅️ ИСПРАВЛЕННЫЙ ВЫБРОС МАССЫ (W)
+// Выброс массы (W)
 function ejectMass() {
   for (const cell of player.cells) {
-    if (cell.mass < CFG.EJECT_MASS + 10) continue; // Защита: нельзя выбросить, если масса слишком мала
+    if (cell.mass < CFG.EJECT_MASS + 10) continue;
     cell.mass -= CFG.EJECT_MASS;
     const wx = (mouse.x - W / 2) / cam.zoom + cam.x;
     const wy = (mouse.y - H / 2) / cam.zoom + cam.y;
@@ -234,15 +293,16 @@ function ejectMass() {
     pellets.push({
       x: cell.x + (dx / d) * getR(cell.mass),
       y: cell.y + (dy / d) * getR(cell.mass),
-      mass: CFG.EJECT_MASS, 
-      r: getR(CFG.EJECT_MASS),
-      vx: (dx / d) * 25, // Чуть быстрее летит
-      vy: (dy / d) * 25, 
+      mass: CFG.EJECT_MASS,
+      r: CFG.EJECT_SIZE,
+      vx: (dx / d) * 25,
+      vy: (dy / d) * 25,
       color: player.color
     });
   }
 }
 
+// Разделение (Пробел)
 function split() {
   const newCells = [];
   for (const cell of player.cells) {
@@ -274,6 +334,7 @@ function split() {
   player.cells.push(...newCells);
 }
 
+// Взрыв от куста
 function explodeCell(cellsArray, cellIndex, virus) {
   const c = cellsArray[cellIndex];
   const maxPieces = Math.min(CFG.VIRUS_EXPLODE_PIECES, CFG.MAX_CELLS - cellsArray.length + 1);
@@ -311,6 +372,7 @@ function explodeCell(cellsArray, cellIndex, virus) {
   cellsArray.push(...newCells);
 }
 
+// Столкновение с кустами
 function checkVirusCollision(cellsArray) {
   for (let i = viruses.length - 1; i >= 0; i--) {
     const v = viruses[i];
@@ -339,22 +401,20 @@ function checkVirusCollision(cellsArray) {
   }
 }
 
+// Управление
 addEventListener('wheel', e => {
   if (!running) return;
   e.preventDefault();
   const zoomStep = 0.1;
-  if (e.deltaY < 0) {
-    manualZoom *= (1 + zoomStep);
-  } else {
-    manualZoom *= (1 - zoomStep);
-  }
-  manualZoom = Math.max(MIN_MANUAL_ZOOM, Math.min(MAX_MANUAL_ZOOM, manualZoom));
+  if (e.deltaY < 0) manualZoom *= (1 + zoomStep);
+  else manualZoom *= (1 - zoomStep);
+  manualZoom = Math.max(CFG.MIN_MANUAL_ZOOM, Math.min(CFG.MAX_MANUAL_ZOOM, manualZoom));
 }, { passive: false });
 
 addEventListener('keydown', e => {
   if (!running) return;
   const key = e.key.toLowerCase();
-  if (key === 'f' || key === 'а') { togglePause(); }
+  if (key === 'f' || key === 'а') togglePause();
   if (key === ' ' && !paused) { split(); e.preventDefault(); }
   if ((key === 'w' || key === 'ц') && !paused) ejectMass();
 });
@@ -427,16 +487,16 @@ function start(spec) {
   player.nick = document.getElementById('nick').value || 'nick';
   player.color = rndColor();
   player.skin = skinImages[player.nick.trim().toLowerCase()] || null;
-  player.cells = [{ 
-    x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: 20, vx: 0, vy: 0, mergeCooldown: 0,
-    nick: player.nick, color: player.color, skin: player.skin 
+  player.cells = [{
+    x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: CFG.START_MASS, vx: 0, vy: 0, mergeCooldown: 0,
+    nick: player.nick, color: player.color, skin: player.skin
   }];
-  cam.x = player.cells[0].x; 
-  cam.y = player.cells[0].y; 
+  cam.x = player.cells[0].x;
+  cam.y = player.cells[0].y;
   cam.baseZoom = 1.0;
   manualZoom = 1.0;
   cam.zoom = 1.0;
-  
+
   document.getElementById('colorDot').style.background = player.color;
   spectate = spec;
   paused = false;
@@ -450,6 +510,7 @@ function start(spec) {
   animate();
 }
 
+// Микрофон
 const micBtn = document.getElementById('micBtn');
 let micStream = null, micOn = false, micDenied = false, audioCtx = null, analyser = null;
 async function requestMic() {
@@ -475,6 +536,7 @@ function paintMic() {
     : `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/><line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2"/></svg>`;
 }
 
+// Рисование вируса
 function drawVirus(v) {
   ctx.save();
   ctx.translate(v.x, v.y);
@@ -491,6 +553,7 @@ function drawVirus(v) {
   ctx.restore();
 }
 
+// Топ сейчас
 function renderTopNow() {
   const list = document.getElementById('topNowList');
   list.innerHTML = '';
@@ -500,10 +563,10 @@ function renderTopNow() {
     players.push({ mass: totalMass, nick: player.nick, isMe: true });
   }
   for (const b of bots) players.push({ mass: b.mass, nick: b.nick, isMe: false });
-  
+
   players.sort((a, b) => b.mass - a.mass);
   const top10 = players.slice(0, 10);
-  
+
   top10.forEach((p, i) => {
     const div = document.createElement('div');
     div.className = 'top-item' + (p.isMe ? ' me' : '');
@@ -528,7 +591,7 @@ function animate(now = performance.now()) {
     lastFpsTime = now;
   }
 
-  ctx.fillStyle = '#0a0f1c';
+  ctx.fillStyle = '#070c16';
   ctx.fillRect(0, 0, W, H);
 
   if (!paused) {
@@ -540,11 +603,14 @@ function animate(now = performance.now()) {
     }
     if (totalMass > 0) { cx /= totalMass; cy /= totalMass; }
 
-    cam.x += (cx - cam.x) * 0.12;
-    cam.y += (cy - cam.y) * 0.12;
-    
-    const desiredBaseZoom = Math.max(0.2, Math.min(1.5, Math.pow(30 / getR(totalMass || 20), 0.55)));
-    cam.baseZoom += (desiredBaseZoom - cam.baseZoom) * 0.1;
+    // Плавность камеры как в оригинале
+    cam.x = (CFG.CAMERA_POS_SMOOTH * cam.x + (1 - CFG.CAMERA_POS_SMOOTH) * cx);
+    cam.y = (CFG.CAMERA_POS_SMOOTH * cam.y + (1 - CFG.CAMERA_POS_SMOOTH) * cy);
+
+    // Автоматический зум
+    const totalSize = player.cells.reduce((s, c) => s + getR(c.mass), 0);
+    const desiredBaseZoom = Math.pow(Math.min(64 / totalSize, 1), 0.4);
+    cam.baseZoom = (CFG.CAMERA_ZOOM_SMOOTH * cam.baseZoom + (1 - CFG.CAMERA_ZOOM_SMOOTH) * desiredBaseZoom);
     cam.zoom = cam.baseZoom * manualZoom;
 
     ctx.save();
@@ -552,19 +618,37 @@ function animate(now = performance.now()) {
     ctx.scale(cam.zoom, cam.zoom);
     ctx.translate(-cam.x, -cam.y);
 
-    ctx.strokeStyle = '#1a2438'; ctx.lineWidth = 1 / cam.zoom;
-    const step = 100;
-    const x0 = Math.max(0, ((cam.x - W / 2 / cam.zoom) / step | 0) * step);
-    const x1 = Math.min(CFG.WORLD, cam.x + W / 2 / cam.zoom);
-    const y0 = Math.max(0, ((cam.y - H / 2 / cam.zoom) / step | 0) * step);
-    const y1 = Math.min(CFG.WORLD, cam.y + H / 2 / cam.zoom);
+    // Сетка координат 5x5 с метками A1-E5
+    ctx.strokeStyle = '#1a2438';
+    ctx.lineWidth = 1 / cam.zoom;
+    const cellSize = CFG.WORLD / CFG.GRID_CELLS;
     ctx.beginPath();
-    for (let x = x0; x <= x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
-    for (let y = y0; y <= y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+    for (let i = 0; i <= CFG.GRID_CELLS; i++) {
+      const pos = i * cellSize;
+      ctx.moveTo(pos, 0); ctx.lineTo(pos, CFG.WORLD);
+      ctx.moveTo(0, pos); ctx.lineTo(CFG.WORLD, pos);
+    }
     ctx.stroke();
-    ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 6 / cam.zoom;
+
+    // Метки сетки
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `${200 / cam.zoom}px Ubuntu`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let row = 0; row < CFG.GRID_CELLS; row++) {
+      for (let col = 0; col < CFG.GRID_CELLS; col++) {
+        const x = col * cellSize + cellSize / 2;
+        const y = row * cellSize + cellSize / 2;
+        ctx.fillText(`${CFG.GRID_LABELS[row]}${col + 1}`, x, y);
+      }
+    }
+
+    // Границы карты
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 6 / cam.zoom;
     ctx.strokeRect(0, 0, CFG.WORLD, CFG.WORLD);
 
+    // Движение игрока
     for (const cell of player.cells) {
       const wx = (mouse.x - W / 2) / cam.zoom + cam.x;
       const wy = (mouse.y - H / 2) / cam.zoom + cam.y;
@@ -582,29 +666,26 @@ function animate(now = performance.now()) {
       cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
       cell.y = Math.max(0, Math.min(CFG.WORLD, cell.y));
       cell.r = getR(cell.mass);
-      if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1 / 60; // 60 секунд при 60 FPS
+      if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1 / 60;
     }
 
-    // ⬅️ ФИЗИКА ВЗАИМОДЕЙСТВИЯ КЛЕТОК ИГРОКА (Без поедания, с зазором 1px)
+    // Слияние клеток
     for (let i = 0; i < player.cells.length; i++) {
       for (let j = i + 1; j < player.cells.length; j++) {
         const a = player.cells[i], b = player.cells[j];
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.hypot(dx, dy) || 1;
-        const minDist = getR(a.mass) + getR(b.mass) + 1; // ⬅️ МИКРО-ЗАЗОР 1 ПИКСЕЛЬ
+        const minDist = getR(a.mass) + getR(b.mass) + 1;
 
         if (d < minDist) {
           if (a.mergeCooldown <= 0 && b.mergeCooldown <= 0) {
-            // Слияние только после 60 секунд
             a.mass += b.mass;
             player.cells.splice(j, 1);
             j--;
           } else {
-            // Сильное отталкивание, чтобы сохранить зазор и не давать слипаться раньше времени
             const overlap = minDist - d;
             const pushForce = overlap * CFG.MERGE_PUSH_FORCE;
-            const nx = dx / d;
-            const ny = dy / d;
+            const nx = dx / d, ny = dy / d;
             a.vx -= nx * pushForce;
             a.vy -= ny * pushForce;
             b.vx += nx * pushForce;
@@ -614,6 +695,7 @@ function animate(now = performance.now()) {
       }
     }
 
+    // ИИ ботов
     for (const b of bots) {
       b.r = getR(b.mass);
       let targetX = b.tx, targetY = b.ty;
@@ -654,19 +736,22 @@ function animate(now = performance.now()) {
 
     const allCells = [...player.cells, ...bots];
 
+    // Поедание еды
     for (const c of allCells) {
       for (let i = foods.length - 1; i >= 0; i--) {
         const f = foods[i];
         if (Math.abs(f.x - c.x) < c.r && Math.abs(f.y - c.y) < c.r) {
-          c.mass += CFG.FOOD_MASS;
+          c.mass += f.mass;
           foods.splice(i, 1);
         }
       }
     }
 
+    // Столкновение с кустами
     checkVirusCollision(player.cells);
     checkVirusCollision(bots);
 
+    // Поедание порошков
     const updatedAllCells = [...player.cells, ...bots];
     for (const c of updatedAllCells) {
       for (let i = pellets.length - 1; i >= 0; i--) {
@@ -678,14 +763,14 @@ function animate(now = performance.now()) {
       }
     }
 
+    // Поедание игроков/ботов
     let playerDied = false;
     const finalAllCells = [...player.cells, ...bots];
     for (let i = 0; i < finalAllCells.length; i++) {
       for (let j = 0; j < finalAllCells.length; j++) {
         if (i === j) continue;
         const a = finalAllCells[i], b = finalAllCells[j];
-        
-        // ⬅️ ЗАПРЕТ НА ПОЕДАНИЕ СОБСТВЕННЫХ КЛЕТОК
+
         const aIsPlayer = player.cells.includes(a);
         const bIsPlayer = player.cells.includes(b);
         if (aIsPlayer && bIsPlayer) continue;
@@ -698,7 +783,7 @@ function animate(now = performance.now()) {
             if (player.cells.length === 0) {
               saveDailyRecord(totalMass);
               playerDied = true;
-              player.cells = [{ x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: 20, vx: 0, vy: 0, mergeCooldown: 0, nick: player.nick, color: player.color, skin: player.skin }];
+              player.cells = [{ x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), mass: CFG.START_MASS, vx: 0, vy: 0, mergeCooldown: 0, nick: player.nick, color: player.color, skin: player.skin }];
               player.color = rndColor();
             }
           }
@@ -708,6 +793,7 @@ function animate(now = performance.now()) {
     }
     if (playerDied) updateOnlineCounters();
 
+    // Движение порошков
     for (let i = pellets.length - 1; i >= 0; i--) {
       const p = pellets[i];
       p.x += p.vx; p.y += p.vy;
@@ -716,10 +802,12 @@ function animate(now = performance.now()) {
       p.y = Math.max(0, Math.min(CFG.WORLD, p.y));
     }
 
+    // Рендеринг
     const pad = 100 / cam.zoom;
     const inView = o => o.x > cam.x - W / 2 / cam.zoom - pad && o.x < cam.x + W / 2 / cam.zoom + pad &&
                         o.y > cam.y - H / 2 / cam.zoom - pad && o.y < cam.y + H / 2 / cam.zoom + pad;
 
+    // Еда
     for (const f of foods) {
       if (inView(f)) {
         ctx.fillStyle = f.color;
@@ -727,10 +815,12 @@ function animate(now = performance.now()) {
       }
     }
 
+    // Вирусы
     for (const v of viruses) {
       if (inView(v)) drawVirus(v);
     }
 
+    // Порошки
     for (const p of pellets) {
       if (inView(p)) {
         ctx.fillStyle = p.color;
@@ -738,12 +828,13 @@ function animate(now = performance.now()) {
       }
     }
 
+    // Клетки (сортировка по массе)
     const sortedCells = [...player.cells, ...bots].sort((a, b) => a.mass - b.mass);
     for (const c of sortedCells) {
       if (!inView(c)) continue;
-      
+
       const hasSkin = c.skin && c.skin.complete && c.skin.naturalWidth > 0;
-      
+
       if (hasSkin) {
         ctx.save();
         ctx.beginPath();
@@ -764,35 +855,48 @@ function animate(now = performance.now()) {
         ctx.stroke();
       }
 
+      // Ник и масса (шрифт Ubuntu как в оригинале)
       const fontSize = Math.max(12, c.r / 2.5);
-      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.font = `bold ${fontSize}px Ubuntu, Arial`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      
-      // ⬅️ ОБВОДКА НИКА ТЕПЕРЬ ТЕМНО-СЕРАЯ
-      ctx.strokeStyle = '#333333'; 
+      ctx.strokeStyle = '#333333';
       ctx.lineWidth = 4 / cam.zoom;
       ctx.lineJoin = 'round';
-      
+
       const nickY = hasSkin ? c.y + c.r + fontSize * 0.8 : c.y;
       ctx.strokeText(c.nick || '', c.x, nickY);
       ctx.fillStyle = '#fff';
       ctx.fillText(c.nick || '', c.x, nickY);
 
-      ctx.font = `${Math.max(8, c.r / 4)}px Arial`;
+      ctx.font = `${Math.max(8, c.r / 4)}px Ubuntu, Arial`;
       ctx.strokeText(Math.round(c.mass), c.x, nickY + fontSize * 0.9);
       ctx.fillText(Math.round(c.mass), c.x, nickY + fontSize * 0.9);
     }
 
     ctx.restore();
 
+    // HUD
     document.getElementById('mass').textContent = Math.round(totalMass);
     document.getElementById('pos').textContent = `${cx | 0}, ${cy | 0}`;
+    document.getElementById('cellSize').textContent = player.cells.length > 0 ? Math.round(getR(player.cells[0].mass)) : 0;
     document.getElementById('ping').textContent = Math.floor(Math.random() * 15) + 5;
 
-    mm.fillStyle = '#0d1526'; mm.fillRect(0, 0, 160, 160);
-    const s = 160 / CFG.WORLD;
+    // Миникарта 5x5
+    mm.fillStyle = '#0d1526'; mm.fillRect(0, 0, 140, 140);
+    const s = 140 / CFG.WORLD;
     mm.strokeStyle = '#2b6ef6'; mm.lineWidth = 1;
     mm.strokeRect(cam.x * s - 10, cam.y * s - 10, 20, 20);
+
+    // Сетка на миникарте
+    mm.strokeStyle = 'rgba(255,255,255,0.1)';
+    const cellSizeMini = 140 / CFG.GRID_CELLS;
+    for (let i = 1; i < CFG.GRID_CELLS; i++) {
+      mm.beginPath();
+      mm.moveTo(i * cellSizeMini, 0); mm.lineTo(i * cellSizeMini, 140);
+      mm.moveTo(0, i * cellSizeMini); mm.lineTo(140, i * cellSizeMini);
+      mm.stroke();
+    }
+
     mm.fillStyle = '#22c55e'; for (const v of viruses) mm.fillRect(v.x * s - 1, v.y * s - 1, 2, 2);
     mm.fillStyle = '#fff'; for (const b of bots) mm.fillRect(b.x * s, b.y * s, 2, 2);
     mm.fillStyle = player.color; for (const c of player.cells) mm.fillRect(c.x * s - 1, c.y * s - 1, 3, 3);
@@ -805,20 +909,20 @@ function animate(now = performance.now()) {
     }
 
   } else {
+    // Рендер на паузе
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(cam.zoom, cam.zoom);
     ctx.translate(-cam.x, -cam.y);
 
     ctx.strokeStyle = '#1a2438'; ctx.lineWidth = 1 / cam.zoom;
-    const step = 100;
-    const x0 = Math.max(0, ((cam.x - W / 2 / cam.zoom) / step | 0) * step);
-    const x1 = Math.min(CFG.WORLD, cam.x + W / 2 / cam.zoom);
-    const y0 = Math.max(0, ((cam.y - H / 2 / cam.zoom) / step | 0) * step);
-    const y1 = Math.min(CFG.WORLD, cam.y + H / 2 / cam.zoom);
+    const cellSize = CFG.WORLD / CFG.GRID_CELLS;
     ctx.beginPath();
-    for (let x = x0; x <= x1; x += step) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
-    for (let y = y0; y <= y1; y += step) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
+    for (let i = 0; i <= CFG.GRID_CELLS; i++) {
+      const pos = i * cellSize;
+      ctx.moveTo(pos, 0); ctx.lineTo(pos, CFG.WORLD);
+      ctx.moveTo(0, pos); ctx.lineTo(CFG.WORLD, pos);
+    }
     ctx.stroke();
     ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 6 / cam.zoom;
     ctx.strokeRect(0, 0, CFG.WORLD, CFG.WORLD);
@@ -826,21 +930,20 @@ function animate(now = performance.now()) {
     const pad = 100 / cam.zoom;
     const inView = o => o.x > cam.x - W / 2 / cam.zoom - pad && o.x < cam.x + W / 2 / cam.zoom + pad &&
                         o.y > cam.y - H / 2 / cam.zoom - pad && o.y < cam.y + H / 2 / cam.zoom + pad;
-    
+
     const allCells = [...player.cells, ...bots];
     const sortedCells = [...allCells].sort((a, b) => a.mass - b.mass);
-    
+
     for (const c of sortedCells) {
       if (!inView(c)) continue;
       ctx.fillStyle = c.color;
       ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, 7); ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 2 / cam.zoom; ctx.stroke();
-      
+
       const fontSize = Math.max(12, c.r / 2.5);
-      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.font = `bold ${fontSize}px Ubuntu, Arial`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.strokeStyle = '#333333'; // ⬅️ И здесь тоже темно-серая
-      ctx.lineWidth = 4 / cam.zoom; ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#333333'; ctx.lineWidth = 4 / cam.zoom; ctx.lineJoin = 'round';
       ctx.strokeText(c.nick || '', c.x, c.y);
       ctx.fillStyle = '#fff';
       ctx.fillText(c.nick || '', c.x, c.y);
