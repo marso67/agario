@@ -7,8 +7,6 @@
 <style>
   :root { --blue: #2b6ef6; --card: #131c31; --bg: #0a0f1c; --text: #cfd8ea; }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-  
-  /* ⬅️ КУРСОР ТЕПЕРЬ ВСЕГДА ВИДЕН (default) */
   body { background: var(--bg); font-family: 'Segoe UI', Arial, sans-serif; overflow: hidden; color: var(--text); cursor: default; }
   
   body.playing #menu { display: none; }
@@ -134,13 +132,14 @@
 const CFG = {
   WORLD: 14142,
   FOOD_COUNT: 3000,
-  FOOD_MASS: 20,
+  FOOD_MASS: 5,          // ⬅️ Еда теперь весит 5 единиц
+  FOOD_RADIUS: 10,       // ⬅️ Еда теперь ОДИНАКОВОГО крупного размера
   VIRUS_COUNT: 70,
   BOTS: 50,
   RESPAWN_MS: 10000,
   MAX_CELLS: 16,
   MIN_CELL_MASS: 10,
-  EJECT_MASS: 10,
+  EJECT_MASS: 15,        // ⬅️ Выброс массы теперь 15 единиц (ровно 3 еды)
   EAT_DIFFERENCE: 100,
 
   RADIUS_CONSTANT: 4.3, 
@@ -150,8 +149,8 @@ const CFG = {
   SPLIT_FRICTION: 0.88, 
   VIRUS_MASS: 100,
   VIRUS_EXPLODE_PIECES: 16, 
-  MERGE_COOLDOWN_SECONDS: 15, 
-  MERGE_PUSH_FORCE: 0.5 
+  MERGE_COOLDOWN_SECONDS: 60, // ⬅️ Слияние теперь ровно через 60 секунд (1 минуту)
+  MERGE_PUSH_FORCE: 0.8       // ⬅️ Усилено отталкивание для сохранения зазора
 };
 
 const SKINS = { 'ракета': 'raketa.png' };
@@ -194,7 +193,8 @@ function speedFor(mass) {
 }
 
 const foods = [];
-const spawnFood = () => ({ x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), r: rnd(3, 5), color: `hsl(${rnd(0, 360)}, 70%, 55%)` });
+// ⬅️ Еда теперь строго одного размера
+const spawnFood = () => ({ x: rnd(0, CFG.WORLD), y: rnd(0, CFG.WORLD), r: CFG.FOOD_RADIUS, mass: CFG.FOOD_MASS, color: `hsl(${rnd(0, 360)}, 70%, 55%)` });
 
 const viruses = [];
 const spawnVirus = () => ({ 
@@ -222,9 +222,10 @@ for (let i = 0; i < CFG.BOTS; i++) bots.push(spawnBot());
 
 const pellets = [];
 
+// ⬅️ ИСПРАВЛЕННЫЙ ВЫБРОС МАССЫ (W)
 function ejectMass() {
   for (const cell of player.cells) {
-    if (cell.mass < CFG.MIN_CELL_MASS * 2) continue;
+    if (cell.mass < CFG.EJECT_MASS + 10) continue; // Защита: нельзя выбросить, если масса слишком мала
     cell.mass -= CFG.EJECT_MASS;
     const wx = (mouse.x - W / 2) / cam.zoom + cam.x;
     const wy = (mouse.y - H / 2) / cam.zoom + cam.y;
@@ -233,8 +234,11 @@ function ejectMass() {
     pellets.push({
       x: cell.x + (dx / d) * getR(cell.mass),
       y: cell.y + (dy / d) * getR(cell.mass),
-      mass: CFG.EJECT_MASS, r: getR(CFG.EJECT_MASS),
-      vx: (dx / d) * 20, vy: (dy / d) * 20, color: player.color
+      mass: CFG.EJECT_MASS, 
+      r: getR(CFG.EJECT_MASS),
+      vx: (dx / d) * 25, // Чуть быстрее летит
+      vy: (dy / d) * 25, 
+      color: player.color
     });
   }
 }
@@ -578,26 +582,34 @@ function animate(now = performance.now()) {
       cell.x = Math.max(0, Math.min(CFG.WORLD, cell.x));
       cell.y = Math.max(0, Math.min(CFG.WORLD, cell.y));
       cell.r = getR(cell.mass);
-      if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1 / 60;
+      if (cell.mergeCooldown > 0) cell.mergeCooldown -= 1 / 60; // 60 секунд при 60 FPS
     }
 
+    // ⬅️ ФИЗИКА ВЗАИМОДЕЙСТВИЯ КЛЕТОК ИГРОКА (Без поедания, с зазором 1px)
     for (let i = 0; i < player.cells.length; i++) {
       for (let j = i + 1; j < player.cells.length; j++) {
         const a = player.cells[i], b = player.cells[j];
-        if (a.mergeCooldown > 0 || b.mergeCooldown > 0) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
-        const d = Math.hypot(dx, dy);
-        const minDist = getR(a.mass) + getR(b.mass);
-        if (d < minDist * 0.8) {
-          a.mass += b.mass;
-          player.cells.splice(j, 1);
-          j--;
-        } else {
-          const force = CFG.MERGE_PUSH_FORCE;
-          a.vx += (dx / d) * force;
-          a.vy += (dy / d) * force;
-          b.vx -= (dx / d) * force;
-          b.vy -= (dy / d) * force;
+        const d = Math.hypot(dx, dy) || 1;
+        const minDist = getR(a.mass) + getR(b.mass) + 1; // ⬅️ МИКРО-ЗАЗОР 1 ПИКСЕЛЬ
+
+        if (d < minDist) {
+          if (a.mergeCooldown <= 0 && b.mergeCooldown <= 0) {
+            // Слияние только после 60 секунд
+            a.mass += b.mass;
+            player.cells.splice(j, 1);
+            j--;
+          } else {
+            // Сильное отталкивание, чтобы сохранить зазор и не давать слипаться раньше времени
+            const overlap = minDist - d;
+            const pushForce = overlap * CFG.MERGE_PUSH_FORCE;
+            const nx = dx / d;
+            const ny = dy / d;
+            a.vx -= nx * pushForce;
+            a.vy -= ny * pushForce;
+            b.vx += nx * pushForce;
+            b.vy += ny * pushForce;
+          }
         }
       }
     }
@@ -672,6 +684,12 @@ function animate(now = performance.now()) {
       for (let j = 0; j < finalAllCells.length; j++) {
         if (i === j) continue;
         const a = finalAllCells[i], b = finalAllCells[j];
+        
+        // ⬅️ ЗАПРЕТ НА ПОЕДАНИЕ СОБСТВЕННЫХ КЛЕТОК
+        const aIsPlayer = player.cells.includes(a);
+        const bIsPlayer = player.cells.includes(b);
+        if (aIsPlayer && bIsPlayer) continue;
+
         if ((a.mass > b.mass + CFG.EAT_DIFFERENCE || (a.mass > 30 && a.mass > b.mass * 1.3)) && Math.hypot(a.x - b.x, a.y - b.y) < a.r) {
           a.mass += b.mass;
           const idx = player.cells.indexOf(b);
@@ -749,7 +767,9 @@ function animate(now = performance.now()) {
       const fontSize = Math.max(12, c.r / 2.5);
       ctx.font = `bold ${fontSize}px Arial`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.strokeStyle = '#000';
+      
+      // ⬅️ ОБВОДКА НИКА ТЕПЕРЬ ТЕМНО-СЕРАЯ
+      ctx.strokeStyle = '#333333'; 
       ctx.lineWidth = 4 / cam.zoom;
       ctx.lineJoin = 'round';
       
@@ -819,7 +839,8 @@ function animate(now = performance.now()) {
       const fontSize = Math.max(12, c.r / 2.5);
       ctx.font = `bold ${fontSize}px Arial`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 4 / cam.zoom; ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#333333'; // ⬅️ И здесь тоже темно-серая
+      ctx.lineWidth = 4 / cam.zoom; ctx.lineJoin = 'round';
       ctx.strokeText(c.nick || '', c.x, c.y);
       ctx.fillStyle = '#fff';
       ctx.fillText(c.nick || '', c.x, c.y);
